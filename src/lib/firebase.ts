@@ -4,12 +4,13 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBOh2OyAp68eYhe2svn4bWpXFXs1JV8qgk",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "devtonic-lms-2.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "devtonic-lms-2",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "devtonic-lms-2.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "178747945557",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:178747945557:web:e77ab6c840c4cdb3a11adc"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBABt_PG5DKA8pJeHKUWPMZOvOmW0SGN8g",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "devtonic-lms.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "devtonic-lms",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "devtonic-lms.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "479474889146",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:479474889146:web:b567320a08a225228aed83",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-F3B53N145L"
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

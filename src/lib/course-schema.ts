@@ -14,10 +14,12 @@ export const quizSchema = z.object({
 
 export const moduleSchema = z.object({
   title: z.string().min(1, "Module title is required"),
-  type: z.enum(["text", "video", "pdf"]),
-  content: z.string().min(1, "Content/URL is required"),
-  description: z.string().optional(),
+  videoUrl: z.string().optional(),
+  content: z.string().optional(),
+  notes: z.string().optional(),
   completedBy: z.array(z.string()).optional(),
+  type: z.string().optional(), // Kept for backwards compatibility
+  description: z.string().optional(), // Kept for backwards compatibility
 });
 
 export const sectionSchema = z.object({
@@ -29,6 +31,7 @@ export const sectionSchema = z.object({
 export const courseSchema = z.object({
   title: z.string().min(1, "Course title is required"),
   description: z.string().optional(),
+  price: z.coerce.number().min(0, "Price cannot be negative"),
   sections: z.array(sectionSchema),
 });
 

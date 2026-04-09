@@ -32,8 +32,8 @@ export default function SchoolLayout({
           }
         } else {
           // fallback mock for demo if not seeded yet
-          if (slug === "devtonic") {
-            document.documentElement.style.setProperty("--primary", "rgb(143, 49, 138)"); // devtonic purple
+          if (slug === "iesm") {
+            document.documentElement.style.setProperty("--primary", "#0A4A6B"); // IESM professional blue
           }
         }
       } catch (err) {

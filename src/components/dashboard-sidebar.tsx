@@ -14,6 +14,8 @@ import {
   X,
   ClipboardList,
   Award,
+  MessageSquare,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -45,8 +47,12 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
     { name: "Dashboard", href: `/${schoolSlug}/dashboard`, icon: BarChart },
     { name: "Course Catalog", href: `/${schoolSlug}/courses`, icon: PlayCircle },
     { name: "Completed Courses", href: `/${schoolSlug}/certificates`, icon: Award },
+    { name: "Messages", href: `/${schoolSlug}/messages`, icon: MessageSquare },
     ...(isAdmin || isInstructor
-      ? [{ name: "Manage Courses", href: `/${schoolSlug}/admin/courses`, icon: CheckSquare }]
+      ? [
+          { name: "Manage Courses", href: `/${schoolSlug}/admin/courses`, icon: CheckSquare },
+          { name: "Manage Tasks", href: `/${schoolSlug}/admin/tasks`, icon: ClipboardList }
+        ]
       : []),
     ...(isAdmin
       ? [
@@ -57,6 +63,7 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
             badge: pendingEnrollments,
           },
           { name: "Manage Users", href: `/${schoolSlug}/admin/users`, icon: Users },
+          { name: "Settings", href: `/${schoolSlug}/admin/settings`, icon: SettingsIcon },
         ]
       : []),
   ];
@@ -92,8 +99,8 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
               className="flex items-center gap-2 font-bold text-xl tracking-tight overflow-hidden"
             >
               <img
-                src="https://firebasestorage.googleapis.com/v0/b/devtonic-lms-2.firebasestorage.app/o/Logo_no%20bg.png?alt=media&token=af4099c8-048a-4f73-88ab-7c160a23048b"
-                alt="Devtonic Logo"
+                src="/iesm-logo.jpg"
+                alt="IESM Logo"
                 className="h-8 object-contain shrink-0"
               />
               <span className="capitalize text-gray-800 dark:text-gray-100 truncate">
@@ -104,8 +111,8 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
           {isCollapsed && (
             <Link href={`/${schoolSlug}/dashboard`} onClick={close} className="mx-auto">
               <img
-                src="https://firebasestorage.googleapis.com/v0/b/devtonic-lms-2.firebasestorage.app/o/Logo_no%20bg.png?alt=media&token=af4099c8-048a-4f73-88ab-7c160a23048b"
-                alt="Devtonic Logo"
+                src="/iesm-logo.jpg"
+                alt="IESM Logo"
                 className="h-8 object-contain"
               />
             </Link>

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { User, Mail, KeyRound, Loader2, ChevronRight, UserPlus } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function SignupPage({ params }: { params: Promise<{ schoolSlug: string }> }) {
     const { schoolSlug } = use(params);
@@ -27,57 +28,82 @@ export default function SignupPage({ params }: { params: Promise<{ schoolSlug: s
         setLoading(true);
         try {
             const { collection, query, where, getDocs, deleteDoc } = await import("firebase/firestore");
-            const SUPER_ADMIN_EMAIL = "devtonicllc@gmail.com";
             const cleanEmail = email.toLowerCase().trim();
-            const isSuperAdmin = cleanEmail === SUPER_ADMIN_EMAIL;
 
-            // ─── 1. Check if email already signed up ────────────────────────────
-            const usersRef = collection(db, "schools", schoolSlug, "users");
-            const q = query(usersRef, where("email", "==", cleanEmail));
-            const querySnapshot = await getDocs(q);
+            let userCredential;
+            try {
+                // ─── 1. Create user in Firebase Auth FIRST ──────────────────────────
+                // This authenticates the user so they can read the Firestore 'users' collection
+                userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            } catch (err: any) {
+                if (err.code === "auth/email-already-in-use") {
+                    toast.error("This email is already registered! Please go to Sign In, and use 'Forgot Password' if needed.");
+                } else {
+                    toast.error(err.message || "Failed to create account");
+                }
+                setLoading(false);
+                return;
+            }
 
-            // If a doc already exists and they have already completed signup (not just invited), block re-registration
-            if (!querySnapshot.empty) {
-                const existingData = querySnapshot.docs[0].data();
-                if (existingData.invited === false) {
-                    toast.error("An account with this email already exists. Please sign in instead.");
+            const user = userCredential.user;
+
+            try {
+                // ─── 2. Verify invitation ────────────────────────────
+                const usersRef = collection(db, "schools", schoolSlug, "users");
+                const q = query(usersRef, where("email", "==", cleanEmail));
+                const querySnapshot = await getDocs(q);
+
+                // Must have an invited record
+                if (querySnapshot.empty) {
+                    await user.delete();
+                    await auth.signOut();
+                    toast.error("You must be invited by an admin before signing up.");
                     setLoading(false);
                     return;
                 }
+
+                const existingDoc = querySnapshot.docs[0];
+                const existingData = existingDoc.data();
+                
+                if (existingData.invited === false) {
+                    await user.delete();
+                    await auth.signOut();
+                    toast.error("This invitation has already been used. Please sign in.");
+                    setLoading(false);
+                    return;
+                }
+
+                const userData = { ...existingData, email: cleanEmail };
+
+                // ─── 3. Sync Profile and Data ───────────────────────────────────────
+                // Override the admin's provided name with the user's chosen name
+                await updateProfile(user, { displayName: name });
+
+                await setDoc(doc(db, "schools", schoolSlug, "users", user.uid), {
+                    ...userData,
+                    displayName: name, // Always use the name they set on signup
+                    email: cleanEmail,
+                    uid: user.uid,
+                    role: (userData as any).role ?? "student",
+                    invited: false,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+
+                if (existingDoc && existingDoc.id !== user.uid) {
+                    await deleteDoc(existingDoc.ref);
+                }
+
+                toast.success("Welcome! Your account has been created.");
+                router.push(`/${schoolSlug}/dashboard`);
+            } catch (firestoreErr: any) {
+                // If anything fails during Firestore sync, cleanup the auth account
+                await user.delete();
+                toast.error("Failed to complete signup process.");
+                console.error(firestoreErr);
             }
-
-            // Use existing invite doc data if found, otherwise default to student
-            const existingDoc = !querySnapshot.empty ? querySnapshot.docs[0] : null;
-            const userData = existingDoc
-                ? existingDoc.data()
-                : { role: isSuperAdmin ? "admin" : "student", email: cleanEmail };
-
-            // ─── 2. Create user in Firebase Auth ────────────────────────────────
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            // ─── 3. Sync Profile and Data ───────────────────────────────────────
-            await updateProfile(user, { displayName: name || userData.displayName || name });
-
-            await setDoc(doc(db, "schools", schoolSlug, "users", user.uid), {
-                ...userData,
-                displayName: name || userData.displayName || name,
-                email: cleanEmail,
-                uid: user.uid,
-                role: userData.role ?? "student",
-                invited: false,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-
-            if (existingDoc && existingDoc.id !== user.uid) {
-                await deleteDoc(existingDoc.ref);
-            }
-
-            toast.success("Welcome! Your account has been created.");
-            router.push(`/${schoolSlug}/dashboard`);
         } catch (err: any) {
-            toast.error(err.message || "Failed to create account");
+            toast.error(err.message || "An unexpected error occurred");
         } finally {
             setLoading(false);
         }
@@ -86,9 +112,9 @@ export default function SignupPage({ params }: { params: Promise<{ schoolSlug: s
     return (
         <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#FAFAFA] dark:bg-black">
             {/* Background blobs */}
-            <div className="absolute top-0 -left-4 w-72 h-72 bg-primary/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-            <div className="absolute top-0 -right-4 w-72 h-72 bg-[#DBEAFE] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
-            <div className="absolute -bottom-8 left-20 w-72 h-72 bg-[#F3E8FF] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
+            <div className="absolute top-0 -left-4 w-72 h-72 bg-[#0A4A6B]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
+            <div className="absolute top-0 -right-4 w-72 h-72 bg-[#F4C400]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
+            <div className="absolute -bottom-8 left-20 w-72 h-72 bg-[#003087]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -100,15 +126,25 @@ export default function SignupPage({ params }: { params: Promise<{ schoolSlug: s
                     <motion.div
                         initial={{ scale: 0.8 }}
                         animate={{ scale: 1 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-wider uppercase mb-4"
+                        className="flex justify-center mb-4"
                     >
-                        New Journey
+                        <Image
+                            src="/iesm-logo.jpg"
+                            alt="IESM Logo"
+                            width={100}
+                            height={100}
+                            className="object-contain"
+                            priority
+                        />
                     </motion.div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F4C400]/15 text-[#0A4A6B] text-xs font-bold tracking-wider uppercase mb-4">
+                        Knowledge & Safety
+                    </div>
                     <h1 className="text-4xl font-black tracking-tight text-foreground sm:text-5xl">
                         Create Account
                     </h1>
                     <p className="text-muted-foreground font-medium">
-                        Join <span className="text-foreground capitalize">{schoolSlug.replace("-", " ")}</span>
+                        Join the <span className="text-foreground font-semibold">Institute of Ergonomics & Safety Management</span>
                     </p>
                 </div>
 
@@ -121,7 +157,7 @@ export default function SignupPage({ params }: { params: Promise<{ schoolSlug: s
                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                     <Input
                                         id="name"
-                                        placeholder="Elvis Eyobor"
+                                        placeholder="Your full name"
                                         required
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
@@ -181,10 +217,10 @@ export default function SignupPage({ params }: { params: Promise<{ schoolSlug: s
                     </CardContent>
                 </Card>
 
-                {/* Secure footer info */}
-                <div className="mt-8 flex items-center justify-center gap-6 opacity-40 grayscale grayscale hover:opacity-80 transition-opacity cursor-default">
+                {/* Footer tagline */}
+                <div className="mt-8 flex items-center justify-center gap-6 opacity-40 hover:opacity-80 transition-opacity cursor-default">
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
-                        <UserPlus className="w-3 h-3" /> Open Enrollment
+                        <UserPlus className="w-3 h-3" /> Don&apos;t Let Poor Ergonomics Hurt Your Health!
                     </div>
                 </div>
             </motion.div>

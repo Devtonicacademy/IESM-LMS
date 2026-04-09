@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { KeyRound, Mail, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 interface ForgotPasswordProps {
   schoolSlug: string;
@@ -65,13 +66,8 @@ function ForgotPasswordDialog({ schoolSlug }: ForgotPasswordProps) {
 
         const userData = querySnapshot.docs[0].data();
 
-        // 2. Check if they have actually signed up (created a password) or just invited
-        // If invited is true or they don't have a UID yet, they need to Sign Up first
-        if (userData.invited !== false) {
-          toast.error("You haven't completed your registration yet. Please 'Sign Up' first.");
-          setResetLoading(false);
-          return;
-        }
+        // 2. We allow them to reset password even if invited !== false
+        // because if they failed signup halfway, they exist in Auth but not fully in Firestore.
       }
 
       // 3. Send the actual reset email
@@ -104,7 +100,7 @@ function ForgotPasswordDialog({ schoolSlug }: ForgotPasswordProps) {
           </div>
           <DialogTitle className="text-2xl font-bold">Reset Password</DialogTitle>
           <DialogDescription className="text-base text-muted-foreground">
-            Enter the email associated with your account and we'll send a link to reset your password.
+            Enter the email associated with your account and we&apos;ll send a link to reset your password.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleReset} className="space-y-4 py-4 px-1">
@@ -168,16 +164,52 @@ export default function LoginPage({ params }: { params: Promise<{ schoolSlug: st
       const userDoc = await getDoc(userDocRef);
       
       if (!userDoc.exists()) {
-        await auth.signOut();
-        toast.error("Access denied. Your account has been removed or not found.");
-        return;
+        // They might have a placeholder document because signup failed halfway. Let's find it.
+        const { collection, query, where, getDocs, setDoc, deleteDoc, serverTimestamp } = await import("firebase/firestore");
+        const usersRef = collection(db, "schools", schoolSlug, "users");
+        const q = query(usersRef, where("email", "==", email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const existingDoc = querySnapshot.docs[0];
+          const userData = existingDoc.data();
+          await setDoc(doc(db, "schools", schoolSlug, "users", userCredential.user.uid), {
+            ...userData,
+            uid: userCredential.user.uid,
+            invited: false,
+            updatedAt: serverTimestamp(),
+          });
+          await deleteDoc(existingDoc.ref);
+        } else {
+          await auth.signOut();
+          toast.error("Access denied. Your account has been removed or not found.");
+          return;
+        }
       }
 
       toast.success("Welcome back!");
       router.push(`/${schoolSlug}/dashboard`);
     } catch (err: any) {
-      console.error("Login Error:", err);
       if (err.code === "auth/invalid-credential") {
+        try {
+          // Check if they are simply an invited user who hasn't signed up yet
+          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const usersRef = collection(db, "schools", schoolSlug, "users");
+          const q = query(usersRef, where("email", "==", email.toLowerCase().trim()));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            const userData = querySnapshot.docs[0].data();
+            if (userData.invited === true) {
+              toast.error("You have a pending invite! Please go to 'Sign Up' to create your password and complete registration.");
+              router.push(`/${schoolSlug}/auth/signup`);
+              return;
+            }
+          }
+        } catch (firestoreErr) {
+          // Ignore firestore errors here and fallback to default error
+        }
         toast.error("Invalid email or password. If you haven't yet, please Sign Up first.");
       } else {
         toast.error("Invalid email or password");
@@ -238,10 +270,10 @@ export default function LoginPage({ params }: { params: Promise<{ schoolSlug: st
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#FAFAFA] dark:bg-black">
-      {/* Background blobs for premium feel */}
-      <div className="absolute top-0 -left-4 w-72 h-72 bg-primary/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-      <div className="absolute top-0 -right-4 w-72 h-72 bg-[#CCFBF1] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
-      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-[#FEE2E2] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
+      {/* Background blobs */}
+      <div className="absolute top-0 -left-4 w-72 h-72 bg-[#0A4A6B]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
+      <div className="absolute top-0 -right-4 w-72 h-72 bg-[#F4C400]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
+      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-[#003087]/10 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -253,15 +285,25 @@ export default function LoginPage({ params }: { params: Promise<{ schoolSlug: st
           <motion.div
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-wider uppercase mb-4"
+            className="flex justify-center mb-4"
           >
-            LMS Platform
+            <Image
+              src="/iesm-logo.jpg"
+              alt="IESM Logo"
+              width={100}
+              height={100}
+              className="object-contain"
+              priority
+            />
           </motion.div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F4C400]/15 text-[#0A4A6B] text-xs font-bold tracking-wider uppercase mb-4">
+            IESM Learning Portal
+          </div>
           <h1 className="text-4xl font-black tracking-tight text-foreground sm:text-5xl uppercase">
             Sign In
           </h1>
           <p className="text-muted-foreground font-medium">
-            Enter your details to access your <span className="text-foreground capitalize">{schoolSlug.replace("-", " ")}</span> account
+            Access your <span className="text-foreground font-semibold">IESM</span> learning account
           </p>
         </div>
 
@@ -346,7 +388,7 @@ export default function LoginPage({ params }: { params: Promise<{ schoolSlug: st
             </Button>
 
             <div className="mt-8 text-center text-sm">
-              <span className="text-muted-foreground font-medium">Don't have an account? </span>
+              <span className="text-muted-foreground font-medium">Don&apos;t have an account? </span>
               <Link href={`/${schoolSlug}/auth/signup`} className="text-primary hover:underline font-bold transition-all">
                 Sign Up
               </Link>

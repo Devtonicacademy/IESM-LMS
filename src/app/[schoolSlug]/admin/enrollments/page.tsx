@@ -27,6 +27,7 @@ import {
   BookOpen,
   Loader2,
   Filter,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,6 +42,9 @@ interface EnrollmentRequest {
   studentEmail: string;
   status: "pending" | "approved" | "declined";
   requestedAt: Timestamp;
+  pricePaid?: number;
+  paymentMethod?: string;
+  receiptUrl?: string;
 }
 
 const statusConfig = {
@@ -272,6 +276,24 @@ export default function AdminEnrollmentsPage({
                                 {req.courseName}
                               </p>
                             </div>
+                            {req.pricePaid !== undefined && (
+                              <div className="flex flex-col gap-1 mt-2">
+                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold text-green-700 dark:text-green-400 bg-green-500/10 w-fit">
+                                  Payment: ₦{req.pricePaid.toLocaleString()} ({req.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : req.paymentMethod})
+                                </div>
+                                {req.receiptUrl && (
+                                  <a href={req.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline w-fit">
+                                    <ExternalLink className="h-3 w-3" />
+                                    View Receipt
+                                  </a>
+                                )}
+                                {req.status === "pending" && (
+                                  <div className="text-[11px] font-medium text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 p-1.5 rounded border border-yellow-500/20 max-w-sm">
+                                    ⚠️ Please verify this payment in the company bank account before approving.
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                               Requested {timeAgo}
                             </p>

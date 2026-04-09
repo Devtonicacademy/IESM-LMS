@@ -25,6 +25,7 @@ import {
     Trash2,
     Book,
     Users,
+    UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -64,9 +65,13 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
     const [search, setSearch] = useState("");
     const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
     const [enrollTarget, setEnrollTarget] = useState<Course | null>(null);
+    const [instructorTarget, setInstructorTarget] = useState<Course | null>(null);
     const [students, setStudents] = useState<any[]>([]);
     const [loadingStudents, setLoadingStudents] = useState(false);
     const [studentSearch, setStudentSearch] = useState("");
+    const [instructors, setInstructors] = useState<any[]>([]);
+    const [loadingInstructors, setLoadingInstructors] = useState(false);
+    const [instructorSearch, setInstructorSearch] = useState("");
 
     useEffect(() => {
         if (!loading && !user) router.push(`/${schoolSlug}/auth/login`);
@@ -106,6 +111,19 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
         }
     }, [enrollTarget, schoolSlug]);
 
+    useEffect(() => {
+        if (instructorTarget) {
+            setLoadingInstructors(true);
+            const q = query(collection(db, "schools", schoolSlug, "users"));
+            const unsub = onSnapshot(q, (snap) => {
+                const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setInstructors(allUsers.filter((u: any) => u.role === "instructor"));
+                setLoadingInstructors(false);
+            });
+            return () => unsub();
+        }
+    }, [instructorTarget, schoolSlug]);
+
     const filtered = courses.filter((c) =>
         c.title.toLowerCase().includes(search.toLowerCase())
     );
@@ -139,12 +157,28 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
         }
     }
 
+    async function setCourseInstructor(instructorId: string | null) {
+        if (!instructorTarget) return;
+        try {
+            const courseRef = doc(db, "schools", schoolSlug, "courses", instructorTarget.id);
+            await updateDoc(courseRef, { instructorId: instructorId || "" });
+            setInstructorTarget({ ...instructorTarget, instructorId: instructorId || "" });
+            toast.success(instructorId ? "Instructor assigned" : "Instructor removed");
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to assign instructor");
+        }
+    }
+
     if (loading || (!user && !loading)) {
         return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
     }
 
     const filteredStudents = students.filter(s =>
         (s.displayName || s.email || "").toLowerCase().includes(studentSearch.toLowerCase())
+    );
+    const filteredInstructors = instructors.filter(i => 
+        (i.displayName || i.email || "").toLowerCase().includes(instructorSearch.toLowerCase())
     );
 
     return (
@@ -236,6 +270,13 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                                                                 Enroll Students
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
+                                                                onClick={() => setInstructorTarget(course)}
+                                                                className="cursor-pointer flex items-center gap-2"
+                                                            >
+                                                                <UserCheck className="h-4 w-4" />
+                                                                Assign Instructor
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
                                                                 onClick={() => setDeleteTarget(course)}
                                                                 className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer flex items-center gap-2"
                                                             >
@@ -298,6 +339,66 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                                     </div>
                                 );
                             })
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Assign Instructor Dialog */}
+            <Dialog open={!!instructorTarget} onOpenChange={(o) => !o && setInstructorTarget(null)}>
+                <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col p-0">
+                    <DialogHeader className="p-6 pb-0">
+                        <DialogTitle>Assign Instructor</DialogTitle>
+                        <DialogDescription>
+                            Select an instructor for <span className="font-medium text-foreground">{instructorTarget?.title}</span>
+                        </DialogDescription>
+                        <div className="relative mt-4">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                placeholder="Search instructors..."
+                                value={instructorSearch}
+                                onChange={(e) => setInstructorSearch(e.target.value)}
+                                className="pl-9 rounded-xl h-10"
+                            />
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-2">
+                        {loadingInstructors ? (
+                            <p className="text-center text-sm text-muted-foreground py-4">Loading instructors...</p>
+                        ) : filteredInstructors.length === 0 ? (
+                            <p className="text-center text-sm text-muted-foreground py-4">No instructors found.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {instructorTarget?.instructorId && (
+                                    <div className="flex justify-end border-b border-border/50 pb-4">
+                                        <Button variant="outline" size="sm" onClick={() => setCourseInstructor(null)} className="text-destructive h-8">
+                                            Remove Current Instructor
+                                        </Button>
+                                    </div>
+                                )}
+                                {filteredInstructors.map((instructor) => {
+                                    const isAssigned = instructorTarget?.instructorId === instructor.id;
+                                    return (
+                                        <div key={instructor.id} className={cn("flex items-center justify-between p-3 rounded-xl border transition-colors", isAssigned ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20")}>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium truncate">{instructor.displayName || "Unknown User"}</p>
+                                                <p className="text-xs text-muted-foreground truncate">{instructor.email}</p>
+                                                {isAssigned && <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-semibold uppercase tracking-wider">Assigned</span>}
+                                            </div>
+                                            {!isAssigned && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="default"
+                                                    className="rounded-lg h-8 px-4 ml-3"
+                                                    onClick={() => setCourseInstructor(instructor.id)}
+                                                >
+                                                    Assign
+                                                </Button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
                 </DialogContent>

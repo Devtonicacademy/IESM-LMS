@@ -18,14 +18,12 @@ export async function POST(req: Request) {
       },
     });
 
-    const isApproved = status === "approved";
+    let subject = "";
+    let html = "";
 
-    const subject = isApproved
-      ? `🎉 Enrollment Approved – ${courseName}`
-      : `Enrollment Update – ${courseName}`;
-
-    const html = isApproved
-      ? `
+    if (status === "approved") {
+      subject = `🎉 Enrollment Approved – ${courseName}`;
+      html = `
         <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
           <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 32px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">🎉 You're In!</h1>
@@ -49,8 +47,31 @@ export async function POST(req: Request) {
             <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center;">This email was sent by Devtonic Academy. Do not reply.</p>
           </div>
         </div>
-      `
-      : `
+      `;
+    } else if (status === "pending_payment") {
+      subject = `Payment Confirmation Received – ${courseName}`;
+      html = `
+        <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
+          <div style="background: linear-gradient(135deg, #fbbf24, #d97706); padding: 32px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Payment Received</h1>
+          </div>
+          <div style="padding: 32px;">
+            <p style="color: #111827; font-size: 16px;">Hi <strong>${studentName}</strong>,</p>
+            <p style="color: #374151; font-size: 15px; line-height: 1.6;">
+              We have received your enrollment and payment confirmation for <strong>${courseName}</strong>.
+            </p>
+            <p style="color: #374151; font-size: 15px; line-height: 1.6;">
+              Our team is currently verifying the bank transfer. This usually takes between 1-24 hours. We will send you another email as soon as your access is approved!
+            </p>
+          </div>
+          <div style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center;">This email was sent by Devtonic Academy. Do not reply.</p>
+          </div>
+        </div>
+      `;
+    } else {
+      subject = `Enrollment Update – ${courseName}`;
+      html = `
         <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
           <div style="background: linear-gradient(135deg, #6b7280, #374151); padding: 32px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">Enrollment Update</h1>
@@ -69,6 +90,7 @@ export async function POST(req: Request) {
           </div>
         </div>
       `;
+    }
 
     // If no email config, skip sending (don't fail)
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {

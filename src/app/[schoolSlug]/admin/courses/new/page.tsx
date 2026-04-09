@@ -7,7 +7,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFieldArray, Control } from "react-hook-form";
+import { useForm, useFieldArray, Control, Controller } from "react-hook-form";
 import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, ArrowLeft, BookOpen, Layers } from "lucide-react";
@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 import { courseSchema, CourseFormValues } from "@/lib/course-schema";
 import { SectionQuizEditor } from "@/components/course/course-quiz-editor";
+import { RichTextEditor } from "@/components/rich-text-editor";
 
 function SectionModules({
   sectionIndex,
@@ -51,7 +52,7 @@ function SectionModules({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => append({ title: "", type: "text", content: "", description: "" })}
+          onClick={() => append({ title: "", videoUrl: "", content: "", notes: "" })}
           className="h-7 text-xs gap-1"
         >
           <Plus className="h-3 w-3" />
@@ -82,58 +83,50 @@ function SectionModules({
                 </Button>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-1">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Module Title</Label>
+                  <Label className="text-xs">Video Link (Optional)</Label>
+                  <Input
+                    {...register(`sections.${sectionIndex}.modules.${index}.videoUrl`)}
+                    placeholder="e.g. https://youtube.com/..."
+                    className="h-9 rounded-lg"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Module Content (Rich Text)</Label>
+                  <Controller
+                    control={control}
+                    name={`sections.${sectionIndex}.modules.${index}.content`}
+                    render={({ field }) => (
+                      <RichTextEditor
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        placeholder="Write your module content here with formatting..."
+                      />
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Notes (Optional)</Label>
+                  <Textarea
+                    placeholder="Add more details or instructor notes..."
+                    {...register(`sections.${sectionIndex}.modules.${index}.notes`)}
+                    className="min-h-[80px] rounded-lg text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Module Title <span className="text-destructive">*</span></Label>
                   <Input
                     {...register(`sections.${sectionIndex}.modules.${index}.title`)}
                     placeholder="e.g. Intro to UI Design"
-                    className="h-9 rounded-lg"
+                    className="h-9 rounded-lg border-primary/20"
                   />
                   {errors?.sections?.[sectionIndex]?.modules?.[index]?.title && (
                     <p className="text-[10px] text-destructive">{errors?.sections?.[sectionIndex]?.modules?.[index]?.title?.message}</p>
                   )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Content Type</Label>
-                  <select
-                    {...register(`sections.${sectionIndex}.modules.${index}.type`)}
-                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="text">Rich Text</option>
-                    <option value="video">Video (URL)</option>
-                    <option value="pdf">PDF Link</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs">{type === "text" ? "Rich Text Content" : "Resource URL"}</Label>
-                  {type === "text" ? (
-                    <Textarea
-                      placeholder="Write your module content here..."
-                      {...register(`sections.${sectionIndex}.modules.${index}.content`)}
-                      className="min-h-[120px] rounded-lg"
-                    />
-                  ) : (
-                    <Input
-                      placeholder={type === "video" ? "https://youtube.com/..." : "https://pdf-link.com/..."}
-                      {...register(`sections.${sectionIndex}.modules.${index}.content`)}
-                      className="h-9 rounded-lg"
-                    />
-                  )}
-                  {errors?.sections?.[sectionIndex]?.modules?.[index]?.content && (
-                    <p className="text-[10px] text-destructive">{errors?.sections?.[sectionIndex]?.modules?.[index]?.content?.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs italic text-muted-foreground">Additional Description / Context (Optional)</Label>
-                  <Textarea
-                    placeholder="Add more details about this module..."
-                    {...register(`sections.${sectionIndex}.modules.${index}.description`)}
-                    className="min-h-[80px] rounded-lg text-sm"
-                  />
                 </div>
               </div>
             </motion.div>
@@ -161,11 +154,12 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
   }
 
   const form = useForm<CourseFormValues>({
-    resolver: zodResolver(courseSchema),
+    resolver: zodResolver(courseSchema as any),
     defaultValues: {
       title: "",
       description: "",
-      sections: [{ title: "Introduction", modules: [{ title: "Welcome", type: "text", content: "" }] }],
+      price: 0,
+      sections: [{ title: "Introduction", modules: [{ title: "Welcome", content: "", videoUrl: "", notes: "" }] }],
     },
   });
 
@@ -182,6 +176,7 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
       await addDoc(coursesRef, {
         title: data.title,
         description: data.description || "",
+        price: data.price || 0,
         instructorId: user.uid,
         sections: data.sections.map(s => ({
           ...s,
@@ -227,6 +222,20 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
                 />
                 {form.formState.errors.title && (
                   <p className="text-sm text-destructive">{form.formState.errors.title.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="price" className="text-sm font-semibold">Course Price (₦) <span className="text-muted-foreground font-normal">(Leave 0 for free)</span></Label>
+                <Input
+                  id="price"
+                  type="number"
+                  placeholder="0"
+                  {...form.register("price")}
+                  className={cn("h-11 rounded-xl bg-muted/20 border-border/50 focus:bg-background transition-all", form.formState.errors.price && "border-destructive")}
+                />
+                {form.formState.errors.price && (
+                  <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>
                 )}
               </div>
 

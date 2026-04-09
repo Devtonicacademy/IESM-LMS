@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -26,6 +26,7 @@ export default function ModulePage({
     const [course, setCourse] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     useEffect(() => {
         async function fetchCourse() {
@@ -129,53 +130,64 @@ export default function ModulePage({
     const prevModuleIndex = index > 0 ? index - 1 : null;
 
     return (
-        <div className="min-h-screen bg-muted/10">
+        <div className="min-h-screen bg-muted/10 overflow-x-hidden flex flex-col">
             {/* Top Navbar */}
-            <div className="bg-background border-b sticky top-0 z-20 shadow-sm">
-                <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="bg-background border-b sticky top-0 z-20 shadow-sm w-full">
+                <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
                     <Link
                         href={`/${schoolSlug}/courses/${courseId}`}
-                        className="flex items-center gap-2 text-sm font-semibold hover:text-primary transition-colors group"
+                        className="flex items-center gap-2 text-sm font-semibold hover:text-primary transition-colors group shrink-0"
                     >
                         <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                             <ChevronLeft className="h-4 w-4" />
                         </div>
-                        Back to Course
+                        <span className="hidden sm:inline">Back to Course</span>
                     </Link>
 
-                    <div className="hidden md:flex flex-col items-center max-w-[40%] text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Now Learning</span>
+                    <div className="hidden md:flex flex-col items-center flex-1 min-w-0 px-4 text-center">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold shrink-0">Now Learning</span>
                         <span className="text-sm font-bold truncate w-full">{module.title}</span>
                     </div>
 
-                    <Button
-                        variant={isCompleted ? "secondary" : "default"}
-                        size="sm"
-                        onClick={toggleCompletion}
-                        disabled={updating}
-                        className={cn(
-                            "rounded-lg gap-2 text-xs h-9 px-4 font-bold transition-all shadow-sm",
-                            isCompleted && "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                        )}
-                    >
-                        {isCompleted ? (
-                            <>
-                                <CheckCircle className="h-4 w-4" />
-                                Completed
-                            </>
-                        ) : (
-                            <>
-                                <Circle className="h-4 w-4" />
-                                Mark as Complete
-                            </>
-                        )}
-                    </Button>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <Button
+                            variant={isCompleted ? "secondary" : "default"}
+                            size="sm"
+                            onClick={toggleCompletion}
+                            disabled={updating}
+                            className={cn(
+                                "rounded-lg gap-2 text-xs h-9 px-4 font-bold transition-all shadow-sm",
+                                isCompleted && "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                            )}
+                        >
+                            {isCompleted ? (
+                                <>
+                                    <CheckCircle className="h-4 w-4" />
+                                    Completed
+                                </>
+                            ) : (
+                                <>
+                                    <Circle className="h-4 w-4" />
+                                    Mark as Complete
+                                </>
+                            )}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="hidden lg:flex shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                            title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                        >
+                            {isSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            <div className="container mx-auto py-8 px-4 max-w-5xl lg:grid lg:grid-cols-4 lg:gap-8">
+            <div className="w-full py-6 px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-6 lg:gap-8 transition-all duration-300">
                 {/* Main Content Area */}
-                <div className="lg:col-span-3 space-y-6">
+                <div className="flex-1 min-w-0 space-y-6">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -259,10 +271,11 @@ export default function ModulePage({
                                         </a>
                                     </div>
                                 ) : (
-                                    <div className="p-8 md:p-12">
-                                        <div className="prose prose-lg dark:prose-invert max-w-none whitespace-pre-wrap leading-relaxed text-muted-foreground/90">
-                                            {module.content}
-                                        </div>
+                                    <div className="p-4 sm:p-6 md:p-8 overflow-x-auto w-full">
+                                        <div 
+                                            className="prose prose-base md:prose-lg dark:prose-invert max-w-none whitespace-pre-wrap break-words leading-relaxed text-foreground w-full"
+                                            dangerouslySetInnerHTML={{ __html: module.content }}
+                                        />
                                     </div>
                                 )}
                             </CardContent>
@@ -300,9 +313,12 @@ export default function ModulePage({
                 </div>
 
                 {/* Sidebar Lesson List */}
-                <div className="hidden lg:block lg:col-span-1">
-                    <Card className="border-none shadow-sm sticky top-24 rounded-2xl bg-muted/5 overflow-hidden">
-                        <CardHeader className="bg-background/80 backdrop-blur-sm border-b pb-3 px-4 pt-4">
+                <div className={cn(
+                    "hidden lg:block shrink-0 transition-all duration-300 ease-in-out",
+                    isSidebarOpen ? "w-[300px] xl:w-[350px] opacity-100" : "w-0 opacity-0 overflow-hidden ml-0"
+                )}>
+                    <Card className="border-none shadow-sm sticky top-24 rounded-2xl bg-muted/5 overflow-hidden w-[300px] xl:w-[350px]">
+                        <CardHeader className="bg-background/80 backdrop-blur-sm border-b pb-3 px-4 pt-4 flex flex-row items-baseline justify-between">
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                                 <BookOpen className="h-4 w-4 text-primary" />
                                 Course Content

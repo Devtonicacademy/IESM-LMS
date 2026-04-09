@@ -20,7 +20,7 @@ export function SectionQuizEditor({
     setValue,
 }: {
     sectionIndex: number;
-    control: Control<CourseFormValues>;
+    control: any;
     register: any;
     errors: any;
     watch: any;

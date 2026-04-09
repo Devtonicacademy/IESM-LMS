@@ -15,12 +15,15 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
+import { PaystackButton } from "react-paystack";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, Award } from "lucide-react";
+import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, Award, ClipboardList, Wallet } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -62,6 +65,34 @@ export default function CourseDetailPage({
   const [myAttendanceLogs, setMyAttendanceLogs] = useState<AttendanceLogEntry[]>([]);
   const [allLogs, setAllLogs] = useState<AttendanceLogEntry[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [bankSettings, setBankSettings] = useState<{bankName: string, accountName: string, accountNumber: string} | null>(null);
+  const [paystackSettings, setPaystackSettings] = useState<{enabled: boolean, publicKey: string} | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        const ref = doc(db, "schools", schoolSlug, "settings", "payment");
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const data = snap.data();
+          setBankSettings({
+            bankName: data.bankName || "",
+            accountName: data.accountName || "",
+            accountNumber: data.accountNumber || "",
+          });
+          setPaystackSettings({
+            enabled: !!data.paystackEnabled,
+            publicKey: data.paystackPublicKey || "",
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load settings", err);
+      }
+    }
+    fetchSettings();
+  }, [schoolSlug]);
 
   useEffect(() => {
     async function fetchCourse() {
@@ -137,11 +168,25 @@ export default function CourseDetailPage({
   const isEnrolled = user && course.enrolledStudents?.includes(user.uid);
   const canManage = isAdmin || isInstructor;
 
-  const handleEnroll = async () => {
+  const handleEnroll = async (confirmedPayment = false) => {
     if (!user) { toast.error("Please log in to enroll"); return; }
+    
+    // If course has a price and payment hasn't been confirmed in the modal yet
+    if (course.price > 0 && !confirmedPayment) {
+      setShowPaymentModal(true);
+      return;
+    }
+
     setEnrolling(true);
     try {
-      // Submit enrollment request instead of directly enrolling
+      let receiptUrl = "";
+      if (course.price > 0 && receiptFile) {
+        const fileExt = receiptFile.name.split(".").pop();
+        const storageRef = ref(storage, `schools/${schoolSlug}/receipts/${user.uid}_${Date.now()}.${fileExt}`);
+        const snapshot = await uploadBytes(storageRef, receiptFile);
+        receiptUrl = await getDownloadURL(snapshot.ref);
+      }
+
       await addDoc(collection(db, "schools", schoolSlug, "enrollmentRequests"), {
         courseId,
         courseName: course.title,
@@ -150,11 +195,84 @@ export default function CourseDetailPage({
         studentEmail: user.email || "",
         status: "pending",
         requestedAt: serverTimestamp(),
+        ...(course.price > 0 ? {
+          pricePaid: course.price,
+          paymentMethod: "bank_transfer",
+          ...(receiptUrl ? { receiptUrl } : {})
+        } : {})
       });
+      
+      if (course.price > 0) {
+        // Send email notification for paid course using "pending_payment"
+        try {
+          await fetch("/api/enrollment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: user.email,
+              studentName: user.displayName || user.email || "Student",
+              courseName: course.title,
+              status: "pending_payment",
+              schoolSlug,
+            }),
+          });
+        } catch (emailErr) {
+          console.warn("Notice: Email notification couldn't be sent:", emailErr);
+        }
+      }
+
       setEnrollmentStatus("pending");
-      toast.success("Enrollment request submitted! Waiting for admin approval.");
+      setShowPaymentModal(false);
+      toast.success(course.price > 0 ? "Payment confirmed & request submitted! Waiting for admin approval." : "Enrollment request submitted! Waiting for admin approval.");
     } catch (err: any) {
       toast.error(err.message || "Failed to submit enrollment request");
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handlePaystackSuccess = async (referenceObj: any) => {
+    setEnrolling(true);
+    try {
+      const res = await fetch('/api/paystack/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reference: referenceObj.reference,
+          schoolSlug,
+          courseId,
+          uid: user!.uid,
+          courseName: course.title,
+          studentName: user!.displayName || user!.email || "Student",
+          studentEmail: user!.email || "",
+        })
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Payment successful! You are now enrolled.");
+        
+        try {
+          await fetch("/api/enrollment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: user!.email,
+              studentName: user!.displayName || user!.email || "Student",
+              courseName: course.title,
+              status: "approved",
+              schoolSlug,
+            }),
+          });
+        } catch(e) {}
+        
+        setShowPaymentModal(false);
+        setEnrollmentStatus("approved");
+      } else {
+        toast.error(data.error || "Payment verification failed.");
+      }
+    } catch (err) {
+      toast.error("An error occurred during verification.");
     } finally {
       setEnrolling(false);
     }
@@ -163,7 +281,6 @@ export default function CourseDetailPage({
   const toggleModuleCompletion = async (moduleIndex: number, isCompleted: boolean) => {
     if (!user || !isEnrolled) return;
     try {
-      // 1. Update the flat modules list (legacy compatibility)
       const newModules = [...(course.modules || [])];
       if (moduleIndex >= 0 && moduleIndex < newModules.length) {
         const mod = newModules[moduleIndex];
@@ -175,10 +292,8 @@ export default function CourseDetailPage({
         }
       }
 
-      // 2. Update the nested sections structure (new canonical structure)
       const newSections = course.sections ? JSON.parse(JSON.stringify(course.sections)) : [];
       if (newSections.length > 0) {
-        // Find the module in sections by title and content to match (robust way)
         const targetMod = newModules[moduleIndex];
         if (targetMod) {
           newSections.forEach((s: any) => {
@@ -217,11 +332,11 @@ export default function CourseDetailPage({
   const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   const isFullyCompleted = progressPercent === 100 && totalItems > 0;
 
-  // Build tabs list based on role
   const tabs = [
     { id: "content", label: "Content", show: true },
     { id: "schedule", label: "Schedule", show: true },
     { id: "attendance", label: canManage ? "Attendance" : "My Attendance", show: isEnrolled || canManage },
+    { id: "exercises", label: "Exercises", show: true },
     { id: "notes", label: "My Notes", show: isEnrolled && isStudent },
   ].filter((t) => t.show);
 
@@ -230,11 +345,20 @@ export default function CourseDetailPage({
       <DashboardTopbar breadcrumb={`Course Catalog / ${course.title}`} />
       <div className="p-8 max-w-5xl mx-auto w-full">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
           <div>
             <h1 className="text-4xl font-bold tracking-tight mb-3">{course.title}</h1>
-            <p className="text-lg text-muted-foreground whitespace-pre-wrap">{course.description}</p>
+            <p className="text-lg text-muted-foreground whitespace-pre-wrap mb-4">{course.description}</p>
+            {course.price > 0 && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 font-medium font-mono">
+                ₦{course.price.toLocaleString()}
+              </div>
+            )}
+            {(!course.price || course.price === 0) && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+                Free Course
+              </div>
+            )}
           </div>
           <div className="shrink-0 w-full md:w-auto">
             {isEnrolled ? (
@@ -277,14 +401,13 @@ export default function CourseDetailPage({
                 <p className="text-xs text-muted-foreground">Contact administration for more information.</p>
               </div>
             ) : (
-              <Button size="lg" className="w-full md:w-auto" onClick={handleEnroll} disabled={enrolling}>
-                {enrolling ? "Submitting..." : "Request Enrollment"}
+              <Button size="lg" className="w-full md:w-auto" onClick={() => handleEnroll(false)} disabled={enrolling}>
+                {enrolling ? "Submitting..." : course.price > 0 ? `Pay ₦${course.price.toLocaleString()} to Enroll` : "Request Enrollment"}
               </Button>
             )}
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs defaultValue="content">
           <TabsList className="flex w-full mb-6">
             {tabs.map((t) => (
@@ -292,7 +415,6 @@ export default function CourseDetailPage({
             ))}
           </TabsList>
 
-          {/* Content Tab */}
           <TabsContent value="content">
             <div className="space-y-8">
               <div className="flex items-center justify-between">
@@ -319,7 +441,6 @@ export default function CourseDetailPage({
 
                       <div className="grid gap-4">
                         {section.modules?.map((mod: any, mIdx: number) => {
-                          // Calculate global index by summing modules in previous sections
                           const previousModulesCount = course.sections
                             .slice(0, sIdx)
                             .reduce((acc: number, s: any) => acc + (s.modules?.length || 0), 0);
@@ -373,7 +494,7 @@ export default function CourseDetailPage({
                                         </div>
                                       ) : (
                                         <div className="text-muted-foreground line-clamp-2 italic">
-                                          {mod.content.substring(0, 100)}...
+                                          {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
                                         </div>
                                       )}
                                       <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -479,7 +600,7 @@ export default function CourseDetailPage({
                                   </div>
                                 ) : (
                                   <div className="text-muted-foreground line-clamp-2 italic">
-                                    {mod.content.substring(0, 100)}...
+                                    {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
                                   </div>
                                 )}
                                 <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -503,7 +624,6 @@ export default function CourseDetailPage({
             </div>
           </TabsContent>
 
-          {/* Schedule Tab */}
           <TabsContent value="schedule">
             <CourseSchedule
               schoolSlug={schoolSlug}
@@ -514,7 +634,6 @@ export default function CourseDetailPage({
             />
           </TabsContent>
 
-          {/* Attendance Tab */}
           {(isEnrolled || canManage) && (
             <TabsContent value="attendance">
               {canManage ? (
@@ -554,7 +673,6 @@ export default function CourseDetailPage({
                   ))}
                 </div>
               ) : (
-                // Student view — show only their own attendance
                 <div className="space-y-4">
                   <h2 className="text-xl font-semibold">My Attendance</h2>
                   {logsLoading && <p className="text-center animate-pulse">Loading...</p>}
@@ -598,7 +716,28 @@ export default function CourseDetailPage({
             </TabsContent>
           )}
 
-          {/* Notes Tab — Students Only */}
+          <TabsContent value="exercises">
+            <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                <ClipboardList className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-1">Exercises & Assignments</h3>
+                <p className="text-muted-foreground text-sm max-w-sm">
+                  {canManage
+                    ? "Create exercises, manage student groups, and grade performance."
+                    : "View your assigned exercises and check your scores."}
+                </p>
+              </div>
+              <Link href={`/${schoolSlug}/courses/${courseId}/exercises`}>
+                <Button className="gap-2 bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white border-0 shadow-md">
+                  <ClipboardList className="h-4 w-4" />
+                  {canManage ? "Manage Exercises" : "View Exercises"}
+                </Button>
+              </Link>
+            </div>
+          </TabsContent>
+
           {isEnrolled && isStudent && (
             <TabsContent value="notes">
               <StudentNotes courseId={courseId} />
@@ -607,6 +746,74 @@ export default function CourseDetailPage({
         </Tabs>
       </motion.div>
       </div>
+
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-600" /> Payment Details
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              To complete your enrollment for <strong className="text-foreground">{course.title}</strong>, please pay <strong className="text-green-600 dark:text-green-400 font-mono">₦{course.price?.toLocaleString()}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-muted/30 border border-border/50 p-5 rounded-xl space-y-4 my-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Bank Name</span>
+              <span className="font-semibold text-right">{bankSettings?.bankName || "Pending Configuration"}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Account Name</span>
+              <span className="font-semibold text-right">{bankSettings?.accountName || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Account Number</span>
+              <span className="font-mono font-bold tracking-wider text-lg text-primary bg-primary/10 px-2 py-0.5 rounded text-right">{bankSettings?.accountNumber || "-"}</span>
+            </div>
+          </div>
+          
+          <div className="space-y-2 mb-4 text-sm mt-3">
+            <label className="font-medium">Upload Payment Receipt (Optional)</label>
+            <input 
+              type="file" 
+              accept="image/*,.pdf" 
+              onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} 
+              className="w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer" 
+            />
+          </div>
+          
+          <div className="text-xs text-muted-foreground bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 p-3 rounded-lg border border-yellow-500/20 mb-4">
+            ⚠️ <strong>Important:</strong> After making the transfer, click the button below. An admin will verify the payment and approve your enrollment.
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-col gap-2 relative">
+            <Button className="w-full bg-green-600 hover:bg-green-700 text-white shadow-md font-medium h-11" onClick={() => handleEnroll(true)} disabled={enrolling}>
+               {enrolling ? "Submitting Request..." : "I have made the transfer"}
+            </Button>
+            
+            {paystackSettings?.enabled && paystackSettings.publicKey && (
+              <div className="w-full text-center my-1 pt-1 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-2 mt-2 font-medium uppercase tracking-wider">Or Pay Automatically</p>
+                <PaystackButton
+                  className="w-full inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-[#09A5DB] text-white hover:bg-[#09A5DB]/90 h-11 px-4 py-2"
+                  text="Pay with Card (Instant Access)"
+                  onSuccess={(reference) => handlePaystackSuccess(reference)}
+                  onClose={() => console.log('Payment closed')}
+                  reference={`iesm_${new Date().getTime()}_${Math.floor(Math.random() * 1000000)}`}
+                  email={user?.email || ""}
+                  amount={(course?.price || 0) * 100}
+                  publicKey={paystackSettings.publicKey}
+                />
+              </div>
+            )}
+
+            <Button variant="ghost" className="w-full sm:mt-2 text-muted-foreground" onClick={() => setShowPaymentModal(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
