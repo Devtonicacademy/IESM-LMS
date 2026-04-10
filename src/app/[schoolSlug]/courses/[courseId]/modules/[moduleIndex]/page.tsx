@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -130,13 +130,13 @@ export default function ModulePage({
     const prevModuleIndex = index > 0 ? index - 1 : null;
 
     return (
-        <div className="min-h-screen bg-muted/10 overflow-x-hidden flex flex-col">
+        <div className="min-h-screen bg-muted/10 overflow-x-hidden">
             {/* Top Navbar */}
-            <div className="bg-background border-b sticky top-0 z-20 shadow-sm w-full">
-                <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <div className="bg-background border-b sticky top-0 z-20 shadow-sm">
+                <div className="max-w-[1600px] mx-auto px-4 h-16 flex items-center justify-between">
                     <Link
                         href={`/${schoolSlug}/courses/${courseId}`}
-                        className="flex items-center gap-2 text-sm font-semibold hover:text-primary transition-colors group shrink-0"
+                        className="flex items-center gap-2 text-sm font-semibold hover:text-primary transition-colors group"
                     >
                         <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                             <ChevronLeft className="h-4 w-4" />
@@ -144,12 +144,12 @@ export default function ModulePage({
                         <span className="hidden sm:inline">Back to Course</span>
                     </Link>
 
-                    <div className="hidden md:flex flex-col items-center flex-1 min-w-0 px-4 text-center">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold shrink-0">Now Learning</span>
+                    <div className="hidden md:flex flex-col items-center max-w-[40%] text-center mx-auto">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Now Learning</span>
                         <span className="text-sm font-bold truncate w-full">{module.title}</span>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-3">
                         <Button
                             variant={isCompleted ? "secondary" : "default"}
                             size="sm"
@@ -163,35 +163,41 @@ export default function ModulePage({
                             {isCompleted ? (
                                 <>
                                     <CheckCircle className="h-4 w-4" />
-                                    Completed
+                                    <span className="hidden sm:inline">Completed</span>
                                 </>
                             ) : (
                                 <>
                                     <Circle className="h-4 w-4" />
-                                    Mark as Complete
+                                    <span className="hidden sm:inline">Mark Complete</span>
                                 </>
                             )}
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="hidden lg:flex rounded-lg h-9 w-9 p-0"
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="hidden lg:flex shrink-0 h-9 w-9 text-muted-foreground hover:text-foreground"
-                            title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                            title={isSidebarOpen ? "Hide course content" : "Show course content"}
                         >
-                            {isSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                            <BookOpen className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>
             </div>
 
-            <div className="w-full py-6 px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-6 lg:gap-8 transition-all duration-300">
+            <div className={cn(
+                "mx-auto py-6 md:py-8 px-4 sm:px-6 md:px-8 transition-all duration-300",
+                isSidebarOpen ? "max-w-[1600px] lg:grid lg:grid-cols-4 xl:grid-cols-5 lg:gap-8" : "max-w-5xl"
+            )}>
                 {/* Main Content Area */}
-                <div className="flex-1 min-w-0 space-y-6">
+                <div className={cn(
+                    "transition-all duration-300 w-full",
+                    isSidebarOpen ? "lg:col-span-3 xl:col-span-4 space-y-6" : "space-y-6"
+                )}>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6"
+                        className="space-y-6 w-full"
                     >
                         {/* Header Area */}
                         <div className="flex flex-col gap-4">
@@ -202,7 +208,7 @@ export default function ModulePage({
                                 )}>
                                     {module.type === "video" ? <PlayCircle className="h-6 w-6" /> : module.type === "pdf" ? <File className="h-6 w-6" /> : <FileText className="h-6 w-6" />}
                                 </div>
-                                <h1 className="text-3xl font-extrabold tracking-tight">{module.title}</h1>
+                                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{module.title}</h1>
                             </div>
                             {module.description && (
                                 <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground bg-background/50 p-4 rounded-2xl border border-border/30">
@@ -212,8 +218,8 @@ export default function ModulePage({
                         </div>
 
                         {/* Content Display */}
-                        <Card className="overflow-hidden border-none shadow-2xl bg-card rounded-3xl">
-                            <CardContent className="p-0">
+                        <Card className="overflow-hidden border-none shadow-xl bg-card rounded-2xl sm:rounded-3xl w-full">
+                            <CardContent className="p-0 w-full overflow-x-hidden">
                                 {module.type === "video" ? (
                                     <div className="aspect-video bg-black w-full relative group">
                                         {(() => {
@@ -228,7 +234,7 @@ export default function ModulePage({
                                                 return (
                                                     <iframe
                                                         src={`https://www.youtube.com/embed/${ytId}`}
-                                                        className="w-full h-full border-0"
+                                                        className="w-full h-full border-0 absolute top-0 left-0"
                                                         allowFullScreen
                                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                                     />
@@ -238,7 +244,7 @@ export default function ModulePage({
                                                 return (
                                                     <iframe
                                                         src={`https://player.vimeo.com/video/${vimeoId}`}
-                                                        className="w-full h-full border-0"
+                                                        className="w-full h-full border-0 absolute top-0 left-0"
                                                         allowFullScreen
                                                     />
                                                 );
@@ -259,9 +265,9 @@ export default function ModulePage({
                                         })()}
                                     </div>
                                 ) : module.type === "pdf" ? (
-                                    <div className="flex flex-col items-center justify-center min-h-[400px] p-12 text-center bg-muted/5">
-                                        <File className="h-24 w-24 mb-6 text-red-500 opacity-20" />
-                                        <h3 className="text-2xl font-bold mb-2">Resource Download</h3>
+                                    <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] p-8 sm:p-12 text-center bg-muted/5">
+                                        <File className="h-20 w-20 sm:h-24 sm:w-24 mb-6 text-red-500 opacity-20" />
+                                        <h3 className="text-xl sm:text-2xl font-bold mb-2">Resource Download</h3>
                                         <p className="text-muted-foreground mb-8 max-w-sm mx-auto">Download the supporting documents for this lesson to follow along.</p>
                                         <a href={module.content} target="_blank" rel="noreferrer">
                                             <Button size="lg" className="rounded-xl px-10 shadow-lg gap-2">
@@ -271,9 +277,9 @@ export default function ModulePage({
                                         </a>
                                     </div>
                                 ) : (
-                                    <div className="p-4 sm:p-6 md:p-8 overflow-x-auto w-full">
+                                    <div className="p-6 md:p-8 lg:p-12 w-full overflow-x-hidden">
                                         <div 
-                                            className="prose prose-base md:prose-lg dark:prose-invert max-w-none whitespace-pre-wrap break-words leading-relaxed text-foreground w-full"
+                                            className="prose prose-base sm:prose-lg dark:prose-invert max-w-none whitespace-pre-wrap leading-relaxed text-muted-foreground/90 overflow-x-hidden break-words"
                                             dangerouslySetInnerHTML={{ __html: module.content }}
                                         />
                                     </div>
@@ -290,7 +296,7 @@ export default function ModulePage({
                                     prevModuleIndex === null && "opacity-50 pointer-events-none"
                                 )}
                             >
-                                <Button variant="outline" size="lg" className="w-full h-14 rounded-2xl gap-2 px-8 font-bold border-border/50 shadow-sm">
+                                <Button variant="outline" size="lg" className="w-full h-12 sm:h-14 rounded-2xl gap-2 px-8 font-bold border-border/50 shadow-sm">
                                     <ChevronLeft className="h-5 w-5" />
                                     Previous Lesson
                                 </Button>
@@ -303,7 +309,7 @@ export default function ModulePage({
                                     nextModuleIndex === null && "opacity-50 pointer-events-none"
                                 )}
                             >
-                                <Button size="lg" className="w-full h-14 rounded-2xl gap-2 px-10 font-bold shadow-xl bg-primary hover:opacity-90 transition-opacity">
+                                <Button size="lg" className="w-full h-12 sm:h-14 rounded-2xl gap-2 px-10 font-bold shadow-xl bg-primary hover:opacity-90 transition-opacity">
                                     Next Lesson
                                     <ChevronRight className="h-5 w-5" />
                                 </Button>
@@ -313,58 +319,72 @@ export default function ModulePage({
                 </div>
 
                 {/* Sidebar Lesson List */}
-                <div className={cn(
-                    "hidden lg:block shrink-0 transition-all duration-300 ease-in-out",
-                    isSidebarOpen ? "w-[300px] xl:w-[350px] opacity-100" : "w-0 opacity-0 overflow-hidden ml-0"
-                )}>
-                    <Card className="border-none shadow-sm sticky top-24 rounded-2xl bg-muted/5 overflow-hidden w-[300px] xl:w-[350px]">
-                        <CardHeader className="bg-background/80 backdrop-blur-sm border-b pb-3 px-4 pt-4 flex flex-row items-baseline justify-between">
-                            <CardTitle className="text-sm font-bold flex items-center gap-2">
-                                <BookOpen className="h-4 w-4 text-primary" />
-                                Course Content
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-2 overflow-y-auto max-h-[calc(100vh-250px)]">
-                            <div className="space-y-1">
-                                {allModules.map((m: any, i: number) => {
-                                    const mCompleted = user && m.completedBy?.includes(user!.uid);
-                                    const isActive = i === index;
+                <AnimatePresence>
+                    {isSidebarOpen && (
+                        <motion.div 
+                            initial={{ opacity: 0, width: 0, x: 20 }}
+                            animate={{ opacity: 1, width: "auto", x: 0 }}
+                            exit={{ opacity: 0, width: 0, x: 20 }}
+                            className="hidden lg:block lg:col-span-1 origin-right"
+                        >
+                            <Card className="border-none shadow-sm sticky top-[88px] rounded-2xl bg-muted/5 overflow-hidden w-full transition-all">
+                                <CardHeader className="bg-background/80 backdrop-blur-sm border-b pb-3 px-4 pt-4 flex flex-row items-center justify-between">
+                                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                        <BookOpen className="h-4 w-4 text-primary" />
+                                        Course Content
+                                    </CardTitle>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-6 w-6 rounded-md hover:bg-muted"
+                                        onClick={() => setIsSidebarOpen(false)}
+                                    >
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="p-2 overflow-y-auto max-h-[calc(100vh-140px)]">
+                                    <div className="space-y-1">
+                                        {allModules.map((m: any, i: number) => {
+                                            const mCompleted = user && m.completedBy?.includes(user!.uid);
+                                            const isActive = i === index;
 
-                                    return (
-                                        <Link key={i} href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}>
-                                            <div className={cn(
-                                                "p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3 group border border-transparent",
-                                                isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
-                                                !isActive && mCompleted && "opacity-70"
-                                            )}>
-                                                <div className={cn(
-                                                    "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
-                                                    isActive ? "bg-primary text-primary-foreground border-primary" : "bg-background group-hover:border-primary/30 group-hover:text-primary"
-                                                )}>
-                                                    {m.type === "video" ? <PlayCircle className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className={cn(
-                                                        "text-xs font-bold truncate transition-colors",
-                                                        isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                            return (
+                                                <Link key={i} href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}>
+                                                    <div className={cn(
+                                                        "p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3 group border border-transparent",
+                                                        isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
+                                                        !isActive && mCompleted && "opacity-70"
                                                     )}>
-                                                        {m.title}
-                                                    </p>
-                                                </div>
-                                                {mCompleted && (
-                                                    <CheckCircle className={cn(
-                                                        "h-3.5 w-3.5 shrink-0",
-                                                        isActive ? "text-primary" : "text-primary/50"
-                                                    )} />
-                                                )}
-                                            </div>
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                                                        <div className={cn(
+                                                            "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
+                                                            isActive ? "bg-primary text-primary-foreground border-primary" : "bg-background group-hover:border-primary/30 group-hover:text-primary"
+                                                        )}>
+                                                            {m.type === "video" ? <PlayCircle className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className={cn(
+                                                                "text-xs font-bold truncate transition-colors",
+                                                                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                                            )}>
+                                                                {m.title}
+                                                            </p>
+                                                        </div>
+                                                        {mCompleted && (
+                                                            <CheckCircle className={cn(
+                                                                "h-3.5 w-3.5 shrink-0",
+                                                                isActive ? "text-primary" : "text-primary/50"
+                                                            )} />
+                                                        )}
+                                                    </div>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

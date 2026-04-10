@@ -9,6 +9,34 @@ import { toast } from "sonner";
 import { Loader2, Save, Building, CreditCard, User as UserIcon, Lock, CheckCircle2 } from "lucide-react";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 
+const NIGERIAN_BANKS = [
+  "Access Bank",
+  "Citibank Nigeria",
+  "Ecobank Nigeria",
+  "Fidelity Bank",
+  "First Bank of Nigeria",
+  "First City Monument Bank",
+  "Guaranty Trust Bank (GTBank)",
+  "Heritage Bank",
+  "Keystone Bank",
+  "Kuda Bank",
+  "Moniepoint Microfinance Bank",
+  "Opay",
+  "Palmpay",
+  "Polaris Bank",
+  "Providus Bank",
+  "Stanbic IBTC Bank",
+  "Standard Chartered Bank",
+  "Sterling Bank",
+  "SunTrust Bank",
+  "Titan Trust Bank",
+  "Union Bank of Nigeria",
+  "United Bank for Africa (UBA)",
+  "Unity Bank",
+  "Wema Bank",
+  "Zenith Bank",
+].sort();
+
 export default function SettingsPage() {
   const params = useParams();
   const schoolSlug = params.schoolSlug as string;
@@ -152,13 +180,18 @@ export default function SettingsPage() {
                 <Building className="h-4 w-4 text-muted-foreground" />
                 Bank Name
               </label>
-              <input
-                type="text"
+              <select
                 value={bankSettings.bankName}
                 onChange={(e) => setBankSettings({ ...bankSettings, bankName: e.target.value })}
-                placeholder="e.g. Guaranty Trust Bank"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="" disabled>Select a bank...</option>
+                {NIGERIAN_BANKS.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2">

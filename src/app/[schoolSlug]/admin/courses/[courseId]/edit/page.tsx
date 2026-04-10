@@ -31,7 +31,7 @@ function SectionModules({
     watch
 }: {
     sectionIndex: number,
-    control: any,
+    control: Control<CourseFormValues>,
     register: any,
     errors: any,
     watch: any
@@ -155,7 +155,6 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
         defaultValues: {
             title: "",
             description: "",
-            price: 0,
             sections: [],
         },
     });
