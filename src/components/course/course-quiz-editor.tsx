@@ -56,18 +56,25 @@ export function SectionQuizEditor({
         }
     };
 
-    const handleGenerateAI = async () => {
+    const handleGenerateAI = async (count: number, appendNew: boolean = false) => {
         if (!sectionTitle) {
             toast.error("Please enter a section title first to generate a quiz.");
             return;
         }
+
+        const sectionModules = watch(`sections.${sectionIndex}.modules`) || [];
+        const moduleContents = sectionModules.map((m: any) => m.content || m.description || "").filter(Boolean);
 
         setGenerating(true);
         try {
             const res = await fetch("/api/generate-quiz", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ topic: sectionTitle }),
+                body: JSON.stringify({ 
+                    topic: sectionTitle,
+                    count: count,
+                    contents: moduleContents
+                }),
             });
 
             if (!res.ok) throw new Error("Failed to generate quiz");
@@ -80,11 +87,20 @@ export function SectionQuizEditor({
                 ...q,
             }));
 
-            setValue(`sections.${sectionIndex}.quiz`, {
-                questions: newQuestions,
-                passMark: 80,
-            });
-            toast.success("AI generated a quiz based on the section topic!");
+            if (appendNew) {
+                const existing = watch(`sections.${sectionIndex}.quiz.questions`) || [];
+                setValue(`sections.${sectionIndex}.quiz`, {
+                    questions: [...existing, ...newQuestions],
+                    passMark: watch(`sections.${sectionIndex}.quiz.passMark`) || 80,
+                });
+                toast.success(`AI generated ${count} new question(s)!`);
+            } else {
+                setValue(`sections.${sectionIndex}.quiz`, {
+                    questions: newQuestions,
+                    passMark: watch(`sections.${sectionIndex}.quiz.passMark`) || 80,
+                });
+                toast.success(`AI generated a quiz with ${count} question(s)!`);
+            }
         } catch (err: any) {
             console.error(err);
             toast.error(err.message || "Failed to generate AI quiz.");
@@ -107,9 +123,13 @@ export function SectionQuizEditor({
                         </div>
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={generating} className="flex-1 sm:flex-none">
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(5, false)} disabled={generating} className="flex-1 sm:flex-none">
                             <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
-                            {generating ? "Generating..." : "Generate AI Quiz"}
+                            {generating ? "Generating..." : "Generate 5 AI Questions"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(1, false)} disabled={generating} className="flex-1 sm:flex-none">
+                            <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
+                            {generating ? "Generating..." : "Generate 1 AI Question"}
                         </Button>
                         <Button type="button" size="sm" onClick={handleAddQuiz} className="flex-1 sm:flex-none">
                             <Plus className="w-4 h-4 mr-2" />
@@ -129,9 +149,13 @@ export function SectionQuizEditor({
                     <h4 className="font-bold text-foreground">Section Quiz</h4>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={generating} className="gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(5, false)} disabled={generating} className="gap-2">
                         <Sparkles className="h-3 w-3 text-indigo-500" />
-                        {generating ? "Generating..." : "Regenerate AI"}
+                        {generating ? "Generating..." : "Regenerate 5 AI Questions"}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(1, true)} disabled={generating} className="gap-2">
+                        <Sparkles className="h-3 w-3 text-indigo-500" />
+                        {generating ? "Generating..." : "Add 1 AI Question"}
                     </Button>
                     <Button type="button" variant="ghost" size="sm" onClick={handleRemoveQuiz} className="text-destructive hover:bg-destructive/10 gap-2">
                         <Trash2 className="h-3 w-3" />

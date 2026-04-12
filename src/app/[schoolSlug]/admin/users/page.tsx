@@ -145,6 +145,8 @@ function EditUserDialog({
     );
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
+    const { isSuperAdmin } = useAuth();
+    const availableRoles = isSuperAdmin ? ROLES : ROLES.filter(r => r !== "super-admin");
 
     async function handleUpdate() {
         if (!name.trim() || !email.trim()) {
@@ -225,7 +227,7 @@ function EditUserDialog({
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Role</label>
                         <div className="flex gap-2">
-                            {ROLES.map((r) => (
+                            {availableRoles.map((r) => (
                                 <button
                                     key={r}
                                     type="button"
@@ -290,6 +292,8 @@ function InviteDialog({ schoolSlug }: { schoolSlug: string }) {
     const [name, setName] = useState("");
     const [role, setRole] = useState<Role>("student");
     const [saving, setSaving] = useState(false);
+    const { isSuperAdmin } = useAuth();
+    const availableRoles = isSuperAdmin ? ROLES : ROLES.filter(r => r !== "super-admin");
 
     async function handleInvite() {
         if (!email.trim() || !name.trim()) {
@@ -363,7 +367,7 @@ function InviteDialog({ schoolSlug }: { schoolSlug: string }) {
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Role</label>
                         <div className="flex gap-2">
-                            {ROLES.map((r) => (
+                            {availableRoles.map((r) => (
                                 <button
                                     key={r}
                                     type="button"

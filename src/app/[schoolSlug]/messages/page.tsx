@@ -17,6 +17,7 @@ import {
   setDoc,
   getDoc,
   getDocs,
+  or,
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,7 +99,13 @@ export default function MessagesPage({ params }: { params: Promise<{ schoolSlug:
     let coursesQuery = coursesRef as any;
     if (!isAdmin && !isSuperAdmin) {
       if (isInstructor) {
-        coursesQuery = query(coursesRef, where("instructorId", "==", user.uid));
+        coursesQuery = query(
+          coursesRef,
+          or(
+            where("instructorId", "==", user.uid),
+            where("enrolledStudents", "array-contains", user.uid)
+          )
+        );
       } else {
         coursesQuery = query(coursesRef, where("enrolledStudents", "array-contains", user.uid));
       }
