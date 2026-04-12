@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 
 export async function POST(req: Request) {
     try {
-        const { topic } = await req.json();
+        const { topic, count = 5, contents = [] } = await req.json();
 
         if (!topic) {
             return NextResponse.json({ error: "Missing topic" }, { status: 400 });
@@ -32,7 +32,12 @@ export async function POST(req: Request) {
 
         const ai = new GoogleGenAI({ apiKey });
 
-        const prompt = `Generate a 3-question multiple-choice quiz on the topic: "${topic}".
+        let contextSource = "";
+        if (contents.length > 0) {
+            contextSource = `Here is the module content to base the questions on:\n${contents.join("\n").substring(0, 5000)}\n\n`;
+        }
+
+        const prompt = `${contextSource}Generate a ${count}-question multiple-choice quiz on the topic: "${topic}".
 Output valid JSON only. Format:
 {
   "questions": [

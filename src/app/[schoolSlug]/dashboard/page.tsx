@@ -180,21 +180,23 @@ function AdminDashboardStats({ schoolSlug }: { schoolSlug: string }) {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: "Total Courses", value: stats.courses, icon: Book, color: "text-blue-500", bg: "bg-blue-100" },
-          { label: "Total Students", value: stats.students, icon: Users, color: "text-green-500", bg: "bg-green-100" },
-          { label: "Instructors", value: stats.instructors, icon: Users, color: "text-purple-500", bg: "bg-purple-100" },
-          { label: "Total Enrollments", value: stats.enrollments, icon: CheckCircle2, color: "text-pink-500", bg: "bg-pink-100" },
-          { label: "Active Tasks", value: stats.tasks, icon: CheckSquare, color: "text-orange-500", bg: "bg-orange-100" },
+          { label: "Total Courses", value: stats.courses, icon: Book, color: "text-blue-500", bg: "bg-blue-100", href: `/${schoolSlug}/admin/courses` },
+          { label: "Total Students", value: stats.students, icon: Users, color: "text-green-500", bg: "bg-green-100", href: `/${schoolSlug}/admin/users` },
+          { label: "Instructors", value: stats.instructors, icon: Users, color: "text-purple-500", bg: "bg-purple-100", href: `/${schoolSlug}/admin/users` },
+          { label: "Total Enrollments", value: stats.enrollments, icon: CheckCircle2, color: "text-pink-500", bg: "bg-pink-100", href: `/${schoolSlug}/admin/courses` },
+          { label: "Active Tasks", value: stats.tasks, icon: CheckSquare, color: "text-orange-500", bg: "bg-orange-100", href: `/${schoolSlug}/dashboard` },
         ].map((s, i) => (
-          <Card key={i} className="border-border/50 shadow-sm">
-            <CardContent className="p-6 flex flex-col gap-2">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center mb-2", s.bg)}>
-                <s.icon className={cn("h-5 w-5", s.color)} />
-              </div>
-              <p className="text-sm text-muted-foreground font-medium">{s.label}</p>
-              <h3 className="text-3xl font-bold">{s.value}</h3>
-            </CardContent>
-          </Card>
+          <Link href={s.href} key={i}>
+            <Card className="border-border/50 shadow-sm hover:shadow-md hover:border-primary/50 transition-all h-full cursor-pointer">
+              <CardContent className="p-6 flex flex-col gap-2">
+                <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center mb-2", s.bg)}>
+                  <s.icon className={cn("h-5 w-5", s.color)} />
+                </div>
+                <p className="text-sm text-muted-foreground font-medium group-hover:text-primary transition-colors">{s.label}</p>
+                <h3 className="text-3xl font-bold">{s.value}</h3>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -202,18 +204,20 @@ function AdminDashboardStats({ schoolSlug }: { schoolSlug: string }) {
         <h3 className="text-lg font-semibold mb-4 mt-8">Recent Courses</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {recentCourses.map((course: any) => (
-            <Card key={course.id} className="overflow-hidden border-border/50 hover:shadow-md transition-all group flex flex-col p-1.5 rounded-2xl">
-              <div className="h-32 w-full bg-muted rounded-xl mb-3 relative overflow-hidden flex items-center justify-center">
-                <span className="text-4xl opacity-50 mix-blend-multiply dark:mix-blend-screen">📚</span>
-              </div>
-              <CardContent className="p-3 pt-0 flex flex-col flex-1">
-                <div className="flex justify-between items-center text-xs text-muted-foreground mb-2">
-                  <span className="flex items-center gap-1"><Book className="h-3 w-3"/> {course.modules?.length || 0} Mod</span>
-                  <span className="flex items-center gap-1"><Users className="h-3 w-3"/> {course.enrolledStudents?.length || 0}</span>
+            <Link href={`/${schoolSlug}/courses/${course.id}`} key={course.id}>
+              <Card className="overflow-hidden border-border/50 hover:shadow-md hover:border-primary/50 transition-all group flex flex-col p-1.5 rounded-2xl h-full cursor-pointer">
+                <div className="h-32 w-full bg-muted rounded-xl mb-3 relative overflow-hidden flex items-center justify-center">
+                  <span className="text-4xl opacity-50 mix-blend-multiply dark:mix-blend-screen transition-transform group-hover:scale-110">📚</span>
                 </div>
-                <h3 className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors">{course.title}</h3>
-              </CardContent>
-            </Card>
+                <CardContent className="p-3 pt-0 flex flex-col flex-1">
+                  <div className="flex justify-between items-center text-xs text-muted-foreground mb-2">
+                    <span className="flex items-center gap-1"><Book className="h-3 w-3"/> {course.modules?.length || 0} Mod</span>
+                    <span className="flex items-center gap-1"><Users className="h-3 w-3"/> {course.enrolledStudents?.length || 0}</span>
+                  </div>
+                  <h3 className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors">{course.title}</h3>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </div>

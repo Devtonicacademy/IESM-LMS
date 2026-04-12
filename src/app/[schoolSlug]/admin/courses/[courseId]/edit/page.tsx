@@ -155,6 +155,7 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
         defaultValues: {
             title: "",
             description: "",
+            price: 0,
             sections: [],
         },
     });
@@ -182,6 +183,7 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
                     form.reset({
                         title: data.title || "",
                         description: data.description || "",
+                        price: data.price || 0,
                         sections: initialSections,
                     });
                 } else {
@@ -212,6 +214,7 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
             await updateDoc(courseRef, {
                 title: data.title,
                 description: data.description || "",
+                price: data.price || 0,
                 sections: data.sections,
                 // Also store flattened modules list for simpler consumption in some views if needed
                 modules: data.sections.flatMap(s => s.modules),
@@ -253,6 +256,22 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
                                     <p className="text-sm text-destructive">{form.formState.errors.title.message}</p>
                                 )}
                             </div>
+
+                            {isAdmin && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="price" className="text-sm font-semibold">Course Price (₦) <span className="text-muted-foreground font-normal">(Leave 0 for free)</span></Label>
+                                    <Input
+                                        id="price"
+                                        type="number"
+                                        placeholder="0"
+                                        {...form.register("price")}
+                                        className={cn("h-11 rounded-xl bg-muted/20 border-border/50 focus:bg-background transition-all", form.formState.errors.price && "border-destructive")}
+                                    />
+                                    {form.formState.errors.price && (
+                                        <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="space-y-2">
                                 <Label htmlFor="description" className="text-sm font-semibold">Description</Label>

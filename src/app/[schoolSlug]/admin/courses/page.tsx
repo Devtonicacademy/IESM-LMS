@@ -124,9 +124,11 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
         }
     }, [instructorTarget, schoolSlug]);
 
-    const filtered = courses.filter((c) =>
-        c.title.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = courses.filter((c) => {
+        const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase());
+        const canView = isAdmin || c.instructorId === user?.uid;
+        return matchesSearch && canView;
+    });
 
     async function handleDelete() {
         if (!deleteTarget) return;
@@ -262,27 +264,31 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                                                                 <Edit className="h-4 w-4" />
                                                                 Edit Course
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={() => setEnrollTarget(course)}
-                                                                className="cursor-pointer flex items-center gap-2"
-                                                            >
-                                                                <Users className="h-4 w-4" />
-                                                                Enroll Students
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={() => setInstructorTarget(course)}
-                                                                className="cursor-pointer flex items-center gap-2"
-                                                            >
-                                                                <UserCheck className="h-4 w-4" />
-                                                                Assign Instructor
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={() => setDeleteTarget(course)}
-                                                                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer flex items-center gap-2"
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                                Delete
-                                                            </DropdownMenuItem>
+                                                            {isAdmin && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => setEnrollTarget(course)}
+                                                                        className="cursor-pointer flex items-center gap-2"
+                                                                    >
+                                                                        <Users className="h-4 w-4" />
+                                                                        Enroll Students
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => setInstructorTarget(course)}
+                                                                        className="cursor-pointer flex items-center gap-2"
+                                                                    >
+                                                                        <UserCheck className="h-4 w-4" />
+                                                                        Assign Instructor
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => setDeleteTarget(course)}
+                                                                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer flex items-center gap-2"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </td>

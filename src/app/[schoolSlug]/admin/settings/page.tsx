@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { toast } from "sonner";
-import { Loader2, Save, Building, CreditCard, User as UserIcon, Lock, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, Building, CreditCard, User as UserIcon, Lock, CheckCircle2, ShieldAlert } from "lucide-react";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 
 const NIGERIAN_BANKS = [
@@ -54,6 +54,7 @@ export default function SettingsPage() {
 
   const [paystackSettings, setPaystackSettings] = useState({
     enabled: false,
+    autoApprovePayments: false,
     publicKey: "",
     secretKey: "",
   });
@@ -89,6 +90,7 @@ export default function SettingsPage() {
         setPaystackSettings(prev => ({
           ...prev,
           enabled: !!pData.paystackEnabled,
+          autoApprovePayments: !!pData.autoApprovePayments,
           publicKey: pData.paystackPublicKey || "",
         }));
       }
@@ -125,6 +127,7 @@ export default function SettingsPage() {
           accountName: bankSettings.accountName,
           accountNumber: bankSettings.accountNumber,
           paystackEnabled: paystackSettings.enabled,
+          autoApprovePayments: paystackSettings.autoApprovePayments,
           paystackPublicKey: paystackSettings.publicKey,
           updatedAt: new Date(),
         }, { merge: true }),
@@ -161,6 +164,25 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mt-1">
             Configure platform-wide settings like payment information.
           </p>
+        </div>
+
+        {/* Roles & Permissions Link */}
+        <div className="bg-muted/30 border border-border/50 border-dashed rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+              Roles & Permissions
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Are you a Super Admin? Manage global access control and permission toggles for user roles.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push(`/${schoolSlug}/admin/settings/roles`)}
+            className="inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors bg-background border border-border hover:bg-muted hover:text-foreground h-10 px-4 py-2 shrink-0 shadow-sm"
+          >
+            Manage Permissions
+          </button>
         </div>
 
         {/* Payment Configuration */}
@@ -255,17 +277,35 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="p-6 space-y-5">
-            <div className="flex items-center space-x-3 mb-4">
-              <input
-                type="checkbox"
-                id="paystackEnabled"
-                checked={paystackSettings.enabled}
-                onChange={(e) => setPaystackSettings({ ...paystackSettings, enabled: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <label htmlFor="paystackEnabled" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Enable Paystack Gateway
-              </label>
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="paystackEnabled"
+                  checked={paystackSettings.enabled}
+                  onChange={(e) => setPaystackSettings({ ...paystackSettings, enabled: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="paystackEnabled" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Enable Paystack Gateway
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3 border-l-2 pl-4 border-primary/20">
+                <input
+                  type="checkbox"
+                  id="autoApprove"
+                  checked={paystackSettings.autoApprovePayments}
+                  onChange={(e) => setPaystackSettings({ ...paystackSettings, autoApprovePayments: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <div className="flex flex-col gap-1">
+                    <label htmlFor="autoApprove" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Auto-Approve Payments
+                    </label>
+                    <span className="text-xs text-muted-foreground">Automatically enroll students upon successful Paystack payment without waiting for Admin review.</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
