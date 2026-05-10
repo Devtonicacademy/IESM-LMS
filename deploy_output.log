@@ -1,0 +1,94 @@
+No Firebase app associated with site devtonic-lms, injecting project default config.
+  You can link a Web app to a Hosting site here https://console.firebase.google.com/project/devtonic-lms/settings/general/web
+
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+▲ Next.js 16.1.6 (Turbopack)
+
+- Environments: .env.local
+
+
+  Creating an optimized production build ...
+
+✓ Compiled successfully in 6.3s
+
+  Running TypeScript ...
+
+  Collecting page data using 15 workers ...
+
+  Generating static pages using 15 workers (0/11) ...
+
+  Generating static pages using 15 workers (2/11) 
+
+  Generating static pages using 15 workers (5/11) 
+
+  Generating static pages using 15 workers (8/11) 
+
+✓ Generating static pages using 15 workers (11/11) in 444.5ms
+
+  Finalizing page optimization ...
+
+
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /[schoolSlug]
+├ ƒ /[schoolSlug]/admin/courses
+├ ƒ /[schoolSlug]/admin/courses/[courseId]/edit
+├ ƒ /[schoolSlug]/admin/courses/new
+├ ƒ /[schoolSlug]/admin/enrollments
+├ ƒ /[schoolSlug]/admin/migrate
+├ ƒ /[schoolSlug]/admin/seed
+├ ƒ /[schoolSlug]/admin/settings
+├ ƒ /[schoolSlug]/admin/settings/roles
+├ ƒ /[schoolSlug]/admin/tasks
+├ ƒ /[schoolSlug]/admin/upgrade
+├ ƒ /[schoolSlug]/admin/users
+├ ƒ /[schoolSlug]/auth/instructor-signup/[token]
+├ ƒ /[schoolSlug]/auth/login
+├ ƒ /[schoolSlug]/auth/signup
+├ ƒ /[schoolSlug]/certificates
+├ ƒ /[schoolSlug]/courses
+├ ƒ /[schoolSlug]/courses/[courseId]
+├ ƒ /[schoolSlug]/courses/[courseId]/attendance
+├ ƒ /[schoolSlug]/courses/[courseId]/case-study/[sectionIndex]
+├ ƒ /[schoolSlug]/courses/[courseId]/exercises
+├ ƒ /[schoolSlug]/courses/[courseId]/final-assessment/[sectionIndex]
+├ ƒ /[schoolSlug]/courses/[courseId]/modules/[moduleIndex]
+├ ƒ /[schoolSlug]/courses/[courseId]/quiz/[sectionIndex]
+├ ƒ /[schoolSlug]/dashboard
+├ ƒ /[schoolSlug]/messages
+├ ƒ /api/enrollment
+├ ƒ /api/generate-quiz
+├ ƒ /api/paystack/verify
+├ ƒ /api/send-email
+├ ƒ /api/send-invite
+├ ƒ /api/users/delete
+├ ○ /portal
+└ ƒ /verify/[certificateId]
+
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+Building a Cloud Function to run this application. This is needed due to:
+ • non-static component /[schoolSlug]/admin/courses/[courseId]/edit/page
+ • non-static component /[schoolSlug]/admin/courses/new/page
+ • non-static component /[schoolSlug]/admin/courses/page
+ • non-static component /[schoolSlug]/admin/enrollments/page
+ • non-static component /[schoolSlug]/admin/migrate/page
+ • and 28 other reasons, use --debug to see more
+
+
+Error: An unexpected error has occurred.
