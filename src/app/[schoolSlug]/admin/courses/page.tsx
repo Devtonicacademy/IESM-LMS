@@ -11,9 +11,10 @@ import {
     doc,
     deleteDoc,
     query,
-    orderBy,
     updateDoc,
+    orderBy,
 } from "firebase/firestore";
+import { sendIntroMessage } from "@/lib/sendIntroMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,7 +143,7 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
         }
     }
 
-    async function toggleEnrollment(studentId: string, isEnrolled: boolean) {
+    async function toggleEnrollment(studentId: string, studentName: string, isEnrolled: boolean) {
         if (!enrollTarget) return;
         try {
             const courseRef = doc(db, "schools", schoolSlug, "courses", enrollTarget.id);
@@ -152,6 +153,12 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
 
             await updateDoc(courseRef, { enrolledStudents: newEnrolled });
             setEnrollTarget({ ...enrollTarget, enrolledStudents: newEnrolled });
+            
+            if (!isEnrolled) {
+                // Send automated intro message when enrolling
+                await sendIntroMessage(schoolSlug, enrollTarget.id, enrollTarget.title, studentId, studentName);
+            }
+            
             toast.success(isEnrolled ? "Student removed" : "Student enrolled");
         } catch (err) {
             console.error(err);
@@ -338,7 +345,7 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                                             size="sm"
                                             variant={isEnrolled ? "outline" : "default"}
                                             className="rounded-lg h-8"
-                                            onClick={() => toggleEnrollment(s.id, !!isEnrolled)}
+                                            onClick={() => toggleEnrollment(s.id, s.displayName || "Student", !!isEnrolled)}
                                         >
                                             {isEnrolled ? "Remove" : "Enroll"}
                                         </Button>
@@ -423,7 +430,8 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                         <Button variant="destructive" onClick={handleDelete} className="rounded-xl">Delete</Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
-        </div>
-    );
+      </Dialog>
+    </div>
+  );
 }
+// Force hot reload

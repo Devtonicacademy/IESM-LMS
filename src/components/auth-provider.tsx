@@ -12,6 +12,7 @@ const SUPER_ADMIN_EMAIL = "devtonicllc@gmail.com";
 export type AppUser = User & {
   role?: "super-admin" | "admin" | "instructor" | "student";
   schoolId?: string;
+  session?: string;
 };
 
 interface AuthContextType {
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       if (firebaseUser) {
         let role: "super-admin" | "admin" | "instructor" | "student" | undefined = undefined;
+        let session: string | undefined = undefined;
 
         // 1. Check if hardcoded super-admin email
         if (firebaseUser.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const firestoreRole = userDoc.data().role as any;
+            session = userDoc.data().session as string | undefined;
             // Only update role if it's not already hardcoded super-admin, 
             // OR if firestore specifically says they are a super-admin now.
             if (role !== "super-admin" || firestoreRole === "super-admin") {
@@ -80,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...firebaseUser,
           role: role,
           schoolId: schoolSlug,
+          session: session,
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,

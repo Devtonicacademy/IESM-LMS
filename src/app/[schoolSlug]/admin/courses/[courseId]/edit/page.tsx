@@ -1,26 +1,29 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import React, { use, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray, Control, Controller } from "react-hook-form";
 import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ArrowLeft, GripVertical, ChevronDown, ChevronRight, BookOpen, Layers } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, GripVertical, ChevronDown, ChevronRight, BookOpen, Layers, Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { courseSchema, CourseFormValues } from "@/lib/course-schema";
 import { SectionQuizEditor } from "@/components/course/course-quiz-editor";
+import { SectionCaseStudyEditor, SectionFinalAssessmentEditor } from "@/components/course/course-additional-editors";
 import { RichTextEditor } from "@/components/rich-text-editor";
 
 function SectionModules({
@@ -149,6 +152,8 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
     const router = useRouter();
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const form = useForm<CourseFormValues>({
         resolver: zodResolver(courseSchema as any),
@@ -156,9 +161,14 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
             title: "",
             description: "",
             price: 0,
+            session: "First Academic Session",
+            courseType: "structured",
+            pdfUrl: "",
             sections: [],
         },
     });
+
+    const courseType = form.watch("courseType");
 
     const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({
         name: "sections",
@@ -184,6 +194,9 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
                         title: data.title || "",
                         description: data.description || "",
                         price: data.price || 0,
+                        session: data.session || "First Academic Session",
+                        courseType: data.courseType || "structured",
+                        pdfUrl: data.pdfUrl || "",
                         sections: initialSections,
                     });
                 } else {
@@ -210,14 +223,24 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
         if (!user) return;
         setSaving(true);
         try {
+            let finalPdfUrl = data.pdfUrl || "";
+            if (data.courseType === "pdf_only" && pdfFile) {
+                const fileRef = ref(storage, `courses/${schoolSlug}/${Date.now()}_${pdfFile.name}`);
+                await uploadBytes(fileRef, pdfFile);
+                finalPdfUrl = await getDownloadURL(fileRef);
+            }
+
             const courseRef = doc(db, "schools", schoolSlug, "courses", courseId);
             await updateDoc(courseRef, {
                 title: data.title,
                 description: data.description || "",
                 price: data.price || 0,
-                sections: data.sections,
+                session: data.session || "First Academic Session",
+                courseType: data.courseType || "structured",
+                pdfUrl: finalPdfUrl,
+                sections: data.courseType === "structured" ? data.sections : [],
                 // Also store flattened modules list for simpler consumption in some views if needed
-                modules: data.sections.flatMap(s => s.modules),
+                modules: data.courseType === "structured" ? data.sections.flatMap(s => s.modules || []) : [],
                 updatedAt: serverTimestamp(),
             });
             toast.success("Course updated successfully!");
@@ -257,6 +280,47 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
                                 )}
                             </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="session" className="text-sm font-semibold">Academic Session <span className="text-destructive">*</span></Label>
+                                    <Controller
+                                        control={form.control}
+                                        name="session"
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value || "First Academic Session"}>
+                                                <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-border/50">
+                                                    <SelectValue placeholder="Select Session" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="First Academic Session">First Academic Session</SelectItem>
+                                                    <SelectItem value="Second Academic Session">Second Academic Session</SelectItem>
+                                                    <SelectItem value="Third Academic Session">Third Academic Session</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="courseType" className="text-sm font-semibold">Course Structure <span className="text-destructive">*</span></Label>
+                                    <Controller
+                                        control={form.control}
+                                        name="courseType"
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value || "structured"}>
+                                                <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-border/50">
+                                                    <SelectValue placeholder="Select Structure" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="structured">Structured Curriculum (Modules & Sections)</SelectItem>
+                                                    <SelectItem value="pdf_only">PDF Attachment Only</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                </div>
+                            </div>
+
                             {isAdmin && (
                                 <div className="space-y-2">
                                     <Label htmlFor="price" className="text-sm font-semibold">Course Price (₦) <span className="text-muted-foreground font-normal">(Leave 0 for free)</span></Label>
@@ -287,99 +351,178 @@ export default function EditCoursePage({ params }: { params: Promise<{ schoolSlu
                 </Card>
 
                 <div className="space-y-6">
-                    <div className="flex justify-between items-center bg-background/50 backdrop-blur-sm sticky top-0 py-4 z-10 border-b">
-                        <div className="flex items-center gap-2">
-                            <Layers className="h-5 w-5 text-primary" />
-                            <h3 className="text-xl font-bold">Curriculum Sections</h3>
-                        </div>
-                        <Button
-                            type="button"
-                            onClick={() => appendSection({ title: "", modules: [] })}
-                            variant="outline"
-                            className="rounded-xl border-primary/20 hover:bg-primary/5 text-primary gap-2"
-                        >
-                            <Plus className="h-4 w-4" />
-                            Add Section
-                        </Button>
-                    </div>
-
-                    <div className="space-y-8">
-                        <AnimatePresence>
-                            {sectionFields.map((field, index) => (
-                                <motion.div
-                                    key={field.id}
-                                    initial={{ opacity: 0, scale: 0.98 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    className="p-6 border border-border/50 rounded-2xl bg-card shadow-sm hover:shadow-md transition-shadow relative group"
+                    {courseType === "pdf_only" ? (
+                        <Card className="border-border/50 shadow-lg">
+                            <CardHeader className="pb-4">
+                                <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-primary" />
+                                    Course PDF
+                                </CardTitle>
+                                <CardDescription>Upload the main document for this course. (Leave blank to keep existing)</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div 
+                                    className="border-2 border-dashed border-muted-foreground/30 rounded-2xl p-8 text-center hover:bg-muted/30 transition-colors cursor-pointer"
+                                    onClick={() => fileInputRef.current?.click()}
                                 >
-                                    <div className="absolute top-4 right-4">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => removeSection(index)}
-                                            className="text-destructive hover:bg-destructive/10 rounded-lg"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                    <input
+                                        type="file"
+                                        accept="application/pdf"
+                                        className="hidden"
+                                        ref={fileInputRef}
+                                        onChange={(e) => {
+                                            if (e.target.files?.[0]) setPdfFile(e.target.files[0]);
+                                        }}
+                                    />
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload className="h-8 w-8 text-muted-foreground" />
+                                        <p className="font-semibold">{pdfFile ? pdfFile.name : (form.watch("pdfUrl") ? "Click to replace existing PDF" : "Click to select a PDF file")}</p>
+                                        <p className="text-xs text-muted-foreground">PDF files up to 50MB</p>
                                     </div>
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                                                {index + 1}
-                                            </div>
-                                            <div className="flex-1">
-                                                <Input
-                                                    {...form.register(`sections.${index}.title`)}
-                                                    placeholder="Section Title (e.g. Getting Started)"
-                                                    className={cn("text-lg font-bold border-none bg-transparent h-auto p-0 focus-visible:ring-0 placeholder:opacity-50", form.formState.errors.sections?.[index]?.title && "text-destructive")}
-                                                />
-                                            </div>
-                                        </div>
-                                        {form.formState.errors.sections?.[index]?.title && (
-                                            <p className="text-xs text-destructive">{form.formState.errors.sections[index]?.title?.message}</p>
-                                        )}
-
-                                        <SectionModules
-                                            sectionIndex={index}
-                                            control={form.control}
-                                            register={form.register}
-                                            errors={form.formState.errors}
-                                            watch={form.watch}
-                                        />
-                                        <SectionQuizEditor
-                                            sectionIndex={index}
-                                            control={form.control}
-                                            register={form.register}
-                                            errors={form.formState.errors}
-                                            watch={form.watch}
-                                            setValue={form.setValue}
-                                        />
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-
-                        {sectionFields.length === 0 && (
-                            <div className="text-center py-12 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
-                                <p className="text-muted-foreground">No sections created yet. Add your first section to organize your course content.</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <>
+                            <div className="flex justify-between items-center bg-background/50 backdrop-blur-sm sticky top-0 py-4 z-10 border-b">
+                                <div className="flex items-center gap-2">
+                                    <Layers className="h-5 w-5 text-primary" />
+                                    <h3 className="text-xl font-bold">Curriculum Sections</h3>
+                                </div>
                                 <Button
                                     type="button"
-                                    onClick={() => appendSection({ title: "", modules: [] })}
-                                    variant="ghost"
-                                    className="mt-4 gap-2 text-primary"
+                                    onClick={() => appendSection({ title: "", type: "standard", modules: [] })}
+                                    variant="outline"
+                                    className="rounded-xl border-primary/20 hover:bg-primary/5 text-primary gap-2"
                                 >
                                     <Plus className="h-4 w-4" />
-                                    Create My First Section
+                                    Add Section
                                 </Button>
                             </div>
-                        )}
-                    </div>
+
+                            <div className="space-y-8">
+                                <AnimatePresence>
+                                    {sectionFields.map((field, index) => (
+                                        <motion.div
+                                            key={field.id}
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            className="p-6 border border-border/50 rounded-2xl bg-card shadow-sm hover:shadow-md transition-shadow relative group"
+                                        >
+                                            <div className="space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                                    <div className="flex items-center gap-3 flex-1">
+                                                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm shrink-0">
+                                                            {index + 1}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <Input
+                                                                {...form.register(`sections.${index}.title`)}
+                                                                placeholder="Section Title (e.g. Getting Started)"
+                                                                className={cn("text-lg font-bold border-none bg-transparent h-auto p-0 focus-visible:ring-0 placeholder:opacity-50", form.formState.errors.sections?.[index]?.title && "text-destructive")}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 pl-11 sm:pl-0">
+                                                        <Controller
+                                                            control={form.control}
+                                                            name={`sections.${index}.type`}
+                                                            render={({ field }) => (
+                                                                <Select onValueChange={field.onChange} value={field.value || "standard"}>
+                                                                    <SelectTrigger className="w-[150px] sm:w-48 h-9 text-xs rounded-lg">
+                                                                        <SelectValue placeholder="Section Type" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="standard">Standard Modules</SelectItem>
+                                                                        <SelectItem value="quiz">Quiz Assessment</SelectItem>
+                                                                        <SelectItem value="case_study">Case Study</SelectItem>
+                                                                        <SelectItem value="final_assessment">Final Assessment</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => removeSection(index)}
+                                                            className="text-destructive hover:bg-destructive/10 rounded-lg shrink-0 h-9 w-9"
+                                                            title="Delete Section"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {form.formState.errors.sections?.[index]?.title && (
+                                                    <p className="text-xs text-destructive">{form.formState.errors.sections[index]?.title?.message}</p>
+                                                )}
+
+                                                {form.watch(`sections.${index}.type`) === "standard" && (
+                                                    <SectionModules
+                                                        sectionIndex={index}
+                                                        control={form.control}
+                                                        register={form.register}
+                                                        errors={form.formState.errors}
+                                                        watch={form.watch}
+                                                    />
+                                                )}
+
+                                                {form.watch(`sections.${index}.type`) === "quiz" && (
+                                                    <SectionQuizEditor
+                                                        sectionIndex={index}
+                                                        control={form.control}
+                                                        register={form.register}
+                                                        errors={form.formState.errors}
+                                                        watch={form.watch}
+                                                        setValue={form.setValue}
+                                                    />
+                                                )}
+
+                                                {form.watch(`sections.${index}.type`) === "case_study" && (
+                                                    <SectionCaseStudyEditor
+                                                        sectionIndex={index}
+                                                        control={form.control}
+                                                        register={form.register}
+                                                        errors={form.formState.errors}
+                                                        watch={form.watch}
+                                                    />
+                                                )}
+
+                                                {form.watch(`sections.${index}.type`) === "final_assessment" && (
+                                                    <SectionFinalAssessmentEditor
+                                                        sectionIndex={index}
+                                                        control={form.control}
+                                                        register={form.register}
+                                                        errors={form.formState.errors}
+                                                        watch={form.watch}
+                                                    />
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+
+                                {sectionFields.length === 0 && (
+                                    <div className="text-center py-12 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                                        <p className="text-muted-foreground">No sections created yet. Add your first section to organize your course content.</p>
+                                        <Button
+                                            type="button"
+                                            onClick={() => appendSection({ title: "", type: "standard", modules: [] })}
+                                            variant="ghost"
+                                            className="mt-4 gap-2 text-primary"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Create My First Section
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
-                <Button type="submit" disabled={saving || sectionFields.length === 0} className="w-full h-12 rounded-xl text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700">
+                <Button type="submit" disabled={saving || (courseType === "structured" && sectionFields.length === 0)} className="w-full h-12 rounded-xl text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700">
                     {saving ? "Updating Course..." : "Save Changes"}
                 </Button>
             </form>

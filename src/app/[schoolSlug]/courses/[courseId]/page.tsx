@@ -31,6 +31,7 @@ import CourseSchedule from "@/components/course/course-schedule";
 import StudentNotes from "@/components/course/student-notes";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { generateCertificate } from "@/lib/generate-certificate";
+import CourseCurriculumList from "@/components/course/course-curriculum-list";
 
 interface AttendanceLogEntry {
   id: string;
@@ -363,12 +364,18 @@ export default function CourseDetailPage({
           <div className="shrink-0 w-full md:w-auto">
             {isEnrolled ? (
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
-                <div className="text-sm font-medium text-primary mb-1">Your Progress</div>
-                <div className="text-2xl font-bold">{progressPercent}%</div>
-                <div className="w-full bg-primary/20 h-2 rounded-full mt-2 mb-3 overflow-hidden">
-                  <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-                </div>
-                {isFullyCompleted && isStudent && (
+                <div className="text-sm font-medium text-primary mb-1">Status</div>
+                {course.courseType === "pdf_only" ? (
+                  <div className="text-xl font-bold text-primary mt-2 mb-2">Enrolled & Active</div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{progressPercent}%</div>
+                    <div className="w-full bg-primary/20 h-2 rounded-full mt-2 mb-3 overflow-hidden">
+                      <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+                    </div>
+                  </>
+                )}
+                {isFullyCompleted && isStudent && course.courseType !== "pdf_only" && (
                   <Button
                     size="sm"
                     variant="default"
@@ -387,7 +394,7 @@ export default function CourseDetailPage({
                 )}
               </div>
             ) : canManage ? (
-              <Link href={`/${schoolSlug}/admin/courses/new`}>
+              <Link href={`/${schoolSlug}/admin/courses/${courseId}/edit`}>
                 <Button variant="outline" size="lg">Edit Course</Button>
               </Link>
             ) : enrollmentStatus === "pending" ? (
@@ -409,7 +416,7 @@ export default function CourseDetailPage({
         </div>
 
         <Tabs defaultValue="content">
-          <TabsList className="flex w-full mb-6">
+          <TabsList className="flex w-full mb-6 overflow-x-auto">
             {tabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
             ))}
@@ -421,205 +428,22 @@ export default function CourseDetailPage({
                 <h2 className="text-2xl font-bold flex items-center">
                   <BookOpen className="mr-2 h-6 w-6 text-primary" /> Curriculum
                 </h2>
-                {isEnrolled && (
+                {isEnrolled && course.courseType !== "pdf_only" && (
                   <div className="text-sm font-medium text-muted-foreground">
                     {completedCount} / {totalModules} Completed
                   </div>
                 )}
               </div>
 
-              {course.sections && course.sections.length > 0 ? (
-                <div className="space-y-10">
-                  {course.sections.map((section: any, sIdx: number) => (
-                    <div key={sIdx} className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                          {sIdx + 1}
-                        </div>
-                        <h3 className="text-xl font-bold tracking-tight">{section.title}</h3>
-                      </div>
-
-                      <div className="grid gap-4">
-                        {section.modules?.map((mod: any, mIdx: number) => {
-                          const previousModulesCount = course.sections
-                            .slice(0, sIdx)
-                            .reduce((acc: number, s: any) => acc + (s.modules?.length || 0), 0);
-                          const finalIndex = previousModulesCount + mIdx;
-                          const isCompleted = user && mod.completedBy?.includes(user.uid);
-
-                          return (
-                            <Card key={mIdx} className={`overflow-hidden transition-all duration-300 hover:shadow-md ${isCompleted ? "bg-muted/30 border-primary/20" : "hover:border-primary/30"}`}>
-                              <CardHeader className="py-4 flex flex-row items-center gap-4">
-                                {isEnrolled && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      toggleModuleCompletion(finalIndex, Boolean(isCompleted));
-                                    }}
-                                    className="shrink-0 transition-all hover:scale-110 focus:outline-none z-10"
-                                  >
-                                    {isCompleted ? (
-                                      <CheckCircle className="h-6 w-6 text-primary fill-primary/10" />
-                                    ) : (
-                                      <Circle className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-                                    )}
-                                  </button>
-                                )}
-                                <Link
-                                  href={`/${schoolSlug}/courses/${courseId}/modules/${finalIndex}`}
-                                  className="flex-1 group"
-                                >
-                                  <CardTitle className="text-base font-semibold flex items-center gap-3 group-hover:text-primary transition-colors">
-                                    <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                      {mod.type === "video" ? (
-                                        <PlayCircle className="h-4 w-4 text-blue-500" />
-                                      ) : mod.type === "pdf" ? (
-                                        <File className="h-4 w-4 text-red-500" />
-                                      ) : (
-                                        <FileText className="h-4 w-4 text-green-500" />
-                                      )}
-                                    </div>
-                                    {mod.title}
-                                  </CardTitle>
-                                </Link>
-                              </CardHeader>
-                              {isEnrolled && (
-                                <Link href={`/${schoolSlug}/courses/${courseId}/modules/${finalIndex}`}>
-                                  <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                                    <div className="mt-4 flex items-center justify-between">
-                                      {mod.type === "video" && mod.content.includes("http") ? (
-                                        <div className="inline-flex items-center gap-2 text-primary font-medium group-hover:underline">
-                                          <PlayCircle className="h-4 w-4" />
-                                          Watch Video Lesson
-                                        </div>
-                                      ) : (
-                                        <div className="text-muted-foreground line-clamp-2 italic">
-                                          {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
-                                        </div>
-                                      )}
-                                      <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                                        Open Lesson →
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Link>
-                              )}
-                            </Card>
-                          );
-                        })}
-                        
-                        {section.quiz && section.quiz.questions?.length > 0 && (
-                          <Card className={`overflow-hidden transition-all duration-300 hover:shadow-md ${user && section.quiz.passedBy?.some((p:any) => p.uid === user?.uid) ? "bg-green-500/10 border-green-500/30" : "hover:border-primary/30"}`}>
-                            <CardHeader className="py-4 flex flex-row items-center gap-4">
-                              {isEnrolled && (
-                                <div className="shrink-0 z-10">
-                                  {user && section.quiz.passedBy?.some((p:any) => p.uid === user?.uid) ? (
-                                    <CheckCircle className="h-6 w-6 text-green-500 fill-green-500/10" />
-                                  ) : (
-                                    <Circle className="h-6 w-6 text-muted-foreground transition-colors" />
-                                  )}
-                                </div>
-                              )}
-                              <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`} className="flex-1 group">
-                                <CardTitle className="text-base font-semibold flex items-center gap-3 lg:group-hover:text-primary transition-colors">
-                                  <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                    <FileText className="h-4 w-4 text-indigo-500" />
-                                  </div>
-                                   Section Quiz
-                                </CardTitle>
-                              </Link>
-                            </CardHeader>
-                            {isEnrolled && (
-                               <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`}>
-                                 <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                                   <div className="mt-4 flex items-center justify-between">
-                                     <div className="inline-flex items-center gap-2 text-indigo-500 font-medium group-hover:underline">
-                                       Take Quiz ({section.quiz.questions.length} questions)
-                                     </div>
-                                     <div className="text-xs font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                       Start →
-                                     </div>
-                                   </div>
-                                 </CardContent>
-                               </Link>
-                            )}
-                          </Card>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {course.modules?.map((mod: any, i: number) => {
-                    const isCompleted = user && mod.completedBy?.includes(user.uid);
-                    return (
-                      <Card key={i} className={`transition-all duration-300 ${isCompleted ? "bg-muted/30 border-primary/30" : "hover:border-primary/30"}`}>
-                        <CardHeader className="py-4 flex flex-row items-center gap-4">
-                          {isEnrolled && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                toggleModuleCompletion(i, Boolean(isCompleted));
-                              }}
-                              className="shrink-0 hover:scale-110 transition-transform focus:outline-none z-10"
-                            >
-                              {isCompleted ? (
-                                <CheckCircle className="h-6 w-6 text-primary fill-primary/10" />
-                              ) : (
-                                <Circle className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-                              )}
-                            </button>
-                          )}
-                          <Link
-                            href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}
-                            className="flex-1 group"
-                          >
-                            <CardTitle className="text-lg flex items-center gap-3 font-semibold group-hover:text-primary transition-colors">
-                              <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                {mod.type === "video" ? (
-                                  <PlayCircle className="h-4 w-4 text-blue-500" />
-                                ) : mod.type === "pdf" ? (
-                                  <File className="h-4 w-4 text-red-500" />
-                                ) : (
-                                  <FileText className="h-4 w-4 text-green-500" />
-                                )}
-                              </div>
-                              {mod.title}
-                            </CardTitle>
-                          </Link>
-                        </CardHeader>
-                        {isEnrolled && (
-                          <Link href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}>
-                            <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                              <div className="mt-4 flex items-center justify-between">
-                                {mod.type === "video" && mod.content.includes("http") ? (
-                                  <div className="inline-flex items-center gap-2 text-primary font-medium group-hover:underline">
-                                    <PlayCircle className="h-4 w-4" />
-                                    Watch Video Lesson
-                                  </div>
-                                ) : (
-                                  <div className="text-muted-foreground line-clamp-2 italic">
-                                    {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
-                                  </div>
-                                )}
-                                <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                                  Open Lesson →
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Link>
-                        )}
-                      </Card>
-                    );
-                  })}
-                  {(!course.modules || course.modules.length === 0) && (
-                    <div className="p-12 text-center text-muted-foreground border-2 border-dashed rounded-2xl bg-muted/5">
-                      <BookOpen className="h-10 w-10 mx-auto mb-4 opacity-20" />
-                      <p>No modules have been added to this course yet.</p>
-                    </div>
-                  )}
-                </div>
+              {course && (
+                <CourseCurriculumList
+                  course={course}
+                  schoolSlug={schoolSlug}
+                  courseId={courseId}
+                  user={user}
+                  isEnrolled={Boolean(isEnrolled)}
+                  onToggleModuleCompletion={toggleModuleCompletion}
+                />
               )}
             </div>
           </TabsContent>

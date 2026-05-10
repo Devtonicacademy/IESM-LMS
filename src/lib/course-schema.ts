@@ -22,17 +22,34 @@ export const moduleSchema = z.object({
   description: z.string().optional(), // Kept for backwards compatibility
 });
 
+export const caseStudySchema = z.object({
+  instructions: z.string().min(1, "Instructions are required"),
+  attachmentUrl: z.string().optional(),
+});
+
+export const finalAssessmentSchema = z.object({
+  timePaperInstructions: z.string().optional(),
+  finalProjectInstructions: z.string().optional(),
+  presentationInstructions: z.string().optional(),
+});
+
 export const sectionSchema = z.object({
   title: z.string().min(1, "Section title is required"),
-  modules: z.array(moduleSchema),
+  type: z.enum(["standard", "quiz", "case_study", "final_assessment"]).default("standard"),
+  modules: z.array(moduleSchema).default([]),
   quiz: quizSchema.optional(),
+  caseStudy: caseStudySchema.optional(),
+  finalAssessment: finalAssessmentSchema.optional(),
 });
 
 export const courseSchema = z.object({
   title: z.string().min(1, "Course title is required"),
   description: z.string().optional(),
   price: z.coerce.number().min(0, "Price cannot be negative"),
-  sections: z.array(sectionSchema),
+  session: z.string().optional(),
+  courseType: z.enum(["structured", "pdf_only"]).default("structured"),
+  pdfUrl: z.string().optional(),
+  sections: z.array(sectionSchema).default([]),
 });
 
 export type CourseFormValues = z.infer<typeof courseSchema>;

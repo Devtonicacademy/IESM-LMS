@@ -306,15 +306,53 @@ function InviteDialog({ schoolSlug }: { schoolSlug: string }) {
             const placeholderId = `user_${Date.now()}_${Math.random()
                 .toString(36)
                 .slice(2, 8)}`;
+
+            // For instructors: generate a token client-side and store it
+            const inviteToken = role === "instructor"
+                ? crypto.randomUUID()
+                : null;
+            const inviteTokenExpiresAt = inviteToken
+                ? Date.now() + 7 * 24 * 60 * 60 * 1000
+                : null;
+
             await setDoc(doc(db, "schools", schoolSlug, "users", placeholderId), {
                 email: email.trim().toLowerCase(),
                 displayName: name.trim(),
                 role,
                 schoolId: schoolSlug,
                 invited: true,
+                ...(inviteToken ? { inviteToken, inviteTokenExpiresAt } : {}),
                 createdAt: serverTimestamp(),
             });
-            toast.success(`${name} added as ${role}.`);
+
+            // For instructors, send a personalised invite email with a signup link
+            if (role === "instructor" && inviteToken) {
+                try {
+                    const res = await fetch("/api/send-invite", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email: email.trim().toLowerCase(),
+                            name: name.trim(),
+                            schoolSlug,
+                            token: inviteToken,
+                        }),
+                    });
+                    if (res.ok) {
+                        toast.success(`Invite email sent to ${name}.`);
+                    } else {
+                        toast.success(`${name} added as instructor.`);
+                        toast.warning("Invite email could not be delivered — check server logs.");
+                    }
+                } catch (emailErr) {
+                    console.error("Invite email error:", emailErr);
+                    toast.success(`${name} added as instructor.`);
+                    toast.warning("Invite email failed to send.");
+                }
+            } else {
+                toast.success(`${name} added as ${role}.`);
+            }
+
             setEmail("");
             setName("");
             setRole("student");
@@ -384,9 +422,13 @@ function InviteDialog({ schoolSlug }: { schoolSlug: string }) {
                             ))}
                         </div>
                     </div>
-                    <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl">
-                        <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
-                            <strong>Note on Passwords:</strong> For security, users should set their own passwords. You can add a <strong>Registration Page</strong> or use <strong>Google Sign-In</strong> so they can finalize their profile on first visit.
+                    <div className={`p-3 rounded-xl border ${role === "instructor" ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"}`}>
+                        <p className={`text-[11px] leading-relaxed font-medium ${role === "instructor" ? "text-blue-800 dark:text-blue-300" : "text-amber-800 dark:text-amber-300"}`}>
+                            {role === "instructor" ? (
+                                <><strong>📧 Invite Email:</strong> An invitation email will be sent to this instructor with a secure link to create their password and confirm their name.</>
+                            ) : (
+                                <><strong>Note:</strong> Students and admins can sign in or use the registration page to set up their account.</>
+                            )}
                         </p>
                     </div>
                 </div>
@@ -427,7 +469,22 @@ function DeleteDialog({
     async function handleDelete() {
         setDeleting(true);
         try {
+            // First, delete the user from Firebase Authentication
+            const response = await fetch("/api/users/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uid: user.id, email: user.email }),
+            });
+
+            const result = await response.json();
+            
+            if (!response.ok && result.error !== "Failed to delete from Auth") {
+                throw new Error(result.error || "Failed to delete from Firebase Auth");
+            }
+
+            // Then, delete from Firestore
             await deleteDoc(doc(db, "schools", schoolSlug, "users", user.id));
+            
             toast.success(`${user.displayName} removed.`);
             onClose();
         } catch (err) {
