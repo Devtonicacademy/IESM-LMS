@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "devtonic-lms"
-  }
+    "default": "iesm-lms-app-2026"
+  },
+  "targets": {},
+  "etags": {}
 }

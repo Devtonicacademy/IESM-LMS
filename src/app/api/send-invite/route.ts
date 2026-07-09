@@ -9,7 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://devtonic-lms.web.app';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://iesm-lms-app-2026.web.app';
     const inviteUrl = `${baseUrl}/${schoolSlug}/auth/instructor-signup/${token}`;
 
     const transporter = nodemailer.createTransport({
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
           <div style="text-align: center; padding: 24px 20px 12px;">
-            <img src="https://devtonic-lms.web.app/iesm-logo.jpg" alt="IESM Logo" style="max-width: 120px;" />
+            <img src="https://iesm-lms-app-2026.web.app/iesm-logo.jpg" alt="IESM Logo" style="max-width: 120px;" />
           </div>
 
           <div style="background-color: #FAFAFA; padding: 32px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eee;">

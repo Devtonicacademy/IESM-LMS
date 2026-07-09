@@ -2,12 +2,12 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBABt_PG5DKA8pJeHKUWPMZOvOmW0SGN8g",
-  authDomain: "devtonic-lms.firebaseapp.com",
-  projectId: "devtonic-lms",
-  storageBucket: "devtonic-lms.firebasestorage.app",
-  messagingSenderId: "479474889146",
-  appId: "1:479474889146:web:b567320a08a225228aed83"
+  apiKey: "AIzaSyB3FI3GOs5t7Ml1_heFpFjeEpPB6VNf8SY",
+  authDomain: "iesm-lms-app-2026.firebaseapp.com",
+  projectId: "iesm-lms-app-2026",
+  storageBucket: "iesm-lms-app-2026.firebasestorage.app",
+  messagingSenderId: "626251942055",
+  appId: "1:626251942055:web:56ffc8f038163012b5f382"
 };
 
 const app = initializeApp(firebaseConfig);
