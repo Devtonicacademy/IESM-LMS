@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useState, useRef } from "react";
+import React, { use, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray, Control, Controller } from "react-hook-form";
 import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ArrowLeft, BookOpen, Layers, Upload, FileText } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, BookOpen, Layers, Upload, FileText, Paperclip, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,19 +25,24 @@ import { courseSchema, CourseFormValues } from "@/lib/course-schema";
 import { SectionQuizEditor } from "@/components/course/course-quiz-editor";
 import { SectionCaseStudyEditor, SectionFinalAssessmentEditor } from "@/components/course/course-additional-editors";
 import { RichTextEditor } from "@/components/rich-text-editor";
+import { AIAssessmentAssistant } from "@/components/course/ai-assessment-assistant";
 
 function SectionModules({
   sectionIndex,
   control,
   register,
   errors,
-  watch
+  watch,
+  setValue,
+  schoolSlug
 }: {
   sectionIndex: number,
   control: Control<CourseFormValues>,
   register: any,
   errors: any,
-  watch: any
+  watch: any,
+  setValue: any,
+  schoolSlug: string
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -55,7 +60,7 @@ function SectionModules({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => append({ title: "", videoUrl: "", content: "", notes: "" })}
+          onClick={() => append({ title: "", videoUrl: "", content: "", notes: "", attachments: [] })}
           className="h-7 text-xs gap-1"
         >
           <Plus className="h-3 w-3" />
@@ -66,6 +71,8 @@ function SectionModules({
       <AnimatePresence>
         {fields.map((field, index) => {
           const type = watch(`sections.${sectionIndex}.modules.${index}.type`);
+          const attachments = watch(`sections.${sectionIndex}.modules.${index}.attachments`) || [];
+          
           return (
             <motion.div
               key={field.id}
@@ -88,7 +95,19 @@ function SectionModules({
 
               <div className="grid gap-4 md:grid-cols-1">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Video Link (Optional)</Label>
+                  <Label className="text-xs font-semibold">Module Title <span className="text-destructive">*</span></Label>
+                  <Input
+                    {...register(`sections.${sectionIndex}.modules.${index}.title`)}
+                    placeholder="e.g. Intro to UI Design"
+                    className="h-9 rounded-lg border-primary/20"
+                  />
+                  {errors?.sections?.[sectionIndex]?.modules?.[index]?.title && (
+                    <p className="text-[10px] text-destructive">{errors?.sections?.[sectionIndex]?.modules?.[index]?.title?.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Video Link (Optional)</Label>
                   <Input
                     {...register(`sections.${sectionIndex}.modules.${index}.videoUrl`)}
                     placeholder="e.g. https://youtube.com/..."
@@ -97,7 +116,7 @@ function SectionModules({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Module Content (Rich Text)</Label>
+                  <Label className="text-xs font-semibold">Module Content (Rich Text)</Label>
                   <Controller
                     control={control}
                     name={`sections.${sectionIndex}.modules.${index}.content`}
@@ -112,7 +131,7 @@ function SectionModules({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Notes (Optional)</Label>
+                  <Label className="text-xs font-semibold">Notes (Optional)</Label>
                   <Textarea
                     placeholder="Add more details or instructor notes..."
                     {...register(`sections.${sectionIndex}.modules.${index}.notes`)}
@@ -120,16 +139,83 @@ function SectionModules({
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Module Title <span className="text-destructive">*</span></Label>
-                  <Input
-                    {...register(`sections.${sectionIndex}.modules.${index}.title`)}
-                    placeholder="e.g. Intro to UI Design"
-                    className="h-9 rounded-lg border-primary/20"
-                  />
-                  {errors?.sections?.[sectionIndex]?.modules?.[index]?.title && (
-                    <p className="text-[10px] text-destructive">{errors?.sections?.[sectionIndex]?.modules?.[index]?.title?.message}</p>
+                {/* Attachments Section */}
+                <div className="space-y-2 border-t pt-3 mt-1">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Paperclip className="h-3.5 w-3.5 text-primary" />
+                    Attachments / Lesson Resources (Optional)
+                  </Label>
+
+                  {attachments.length > 0 && (
+                    <div className="space-y-1.5 max-w-xl">
+                      {attachments.map((att: any, attIdx: number) => (
+                        <div key={attIdx} className="flex items-center justify-between p-2 rounded-lg border bg-background text-xs">
+                          <div className="flex items-center gap-2 truncate">
+                            <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="truncate font-medium">{att.name}</span>
+                            {att.size && <span className="text-[10px] text-muted-foreground">({(att.size / 1024).toFixed(1)} KB)</span>}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const updated = attachments.filter((_: any, i: number) => i !== attIdx);
+                              setValue(`sections.${sectionIndex}.modules.${index}.attachments`, updated);
+                            }}
+                            className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.multiple = true;
+                        input.onchange = async (e) => {
+                          const files = (e.target as HTMLInputElement).files;
+                          if (!files || files.length === 0) return;
+                          
+                          const loadingToastId = toast.loading("Uploading attachment...");
+                          try {
+                            const newAttachments = [...attachments];
+                            
+                            for (let i = 0; i < files.length; i++) {
+                              const file = files[i];
+                              const fileRef = ref(storage, `courses/${schoolSlug}/attachments/${Date.now()}_${file.name}`);
+                              await uploadBytes(fileRef, file);
+                              const url = await getDownloadURL(fileRef);
+                              newAttachments.push({
+                                name: file.name,
+                                url,
+                                size: file.size,
+                                type: file.type,
+                              });
+                            }
+                            
+                            setValue(`sections.${sectionIndex}.modules.${index}.attachments`, newAttachments);
+                            toast.success("Attachment(s) uploaded successfully!", { id: loadingToastId });
+                          } catch (err: any) {
+                            toast.error(err.message || "Failed to upload attachments", { id: loadingToastId });
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="text-xs h-8 border-dashed flex items-center gap-1.5"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Upload Files
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -153,6 +239,43 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
   const [saving, setSaving] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+
+  // Redirect instructors — only admins can create new courses
+  useEffect(() => {
+    if (user && !isAdmin && isInstructor) {
+      router.replace(`/${schoolSlug}/admin/courses`);
+    }
+  }, [user, isAdmin, isInstructor, router, schoolSlug]);
+
+  const handleApplyAssessments = (questions: any[], project: string, timesheet: string) => {
+    const newSections: any[] = [];
+    if (questions.length > 0) {
+      newSections.push({
+        title: "Course Quiz",
+        type: "quiz",
+        modules: [],
+        quiz: {
+          questions: questions,
+          passMark: 80
+        }
+      });
+    }
+    if (project.trim().length > 0 || timesheet.trim().length > 0) {
+      newSections.push({
+        title: "Final Assessments",
+        type: "final_assessment",
+        modules: [],
+        finalAssessment: {
+          timePaperInstructions: timesheet,
+          finalProjectInstructions: project,
+          presentationInstructions: "Present your final project to the class."
+        }
+      });
+    }
+    replaceSections(newSections);
+    toast.success("AI generated assessments applied to course form!");
+  };
 
   if (!user || (!isAdmin && !isInstructor)) {
     return <div className="p-8 text-center text-destructive">Unauthorized: You do not have permission to create courses.</div>;
@@ -166,13 +289,13 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
       price: 0,
       session: "First Academic Session",
       courseType: "structured",
-      sections: [{ title: "Introduction", type: "standard", modules: [{ title: "Welcome", content: "", videoUrl: "", notes: "" }] }],
+      sections: [{ title: "Introduction", type: "standard", modules: [{ title: "Welcome", content: "", videoUrl: "", notes: "", attachments: [] }] }],
     },
   });
 
   const courseType = form.watch("courseType");
 
-  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({
+  const { fields: sectionFields, append: appendSection, remove: removeSection, replace: replaceSections } = useFieldArray({
     name: "sections",
     control: form.control,
   });
@@ -197,12 +320,30 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
         courseType: data.courseType || "structured",
         pdfUrl: finalPdfUrl,
         instructorId: user.uid,
-        sections: data.courseType === "structured" ? data.sections.map(s => ({
-          ...s,
-          modules: s.modules?.map(m => ({ ...m, completedBy: [] })) || []
+        sections: data.sections ? data.sections.map(s => ({
+          title: s.title,
+          type: s.type || "standard",
+          modules: s.modules?.map(m => ({
+            title: m.title,
+            videoUrl: m.videoUrl || "",
+            content: m.content || "",
+            notes: m.notes || "",
+            attachments: m.attachments || [],
+            completedBy: []
+          })) || [],
+          quiz: s.quiz || null,
+          caseStudy: s.caseStudy || null,
+          finalAssessment: s.finalAssessment || null
         })) : [],
         // For backwards compatibility and easier counting
-        modules: data.courseType === "structured" ? data.sections.flatMap(s => s.modules?.map(m => ({ ...m, completedBy: [] })) || []) : [],
+        modules: data.sections ? data.sections.flatMap(s => s.modules?.map(m => ({
+          title: m.title,
+          videoUrl: m.videoUrl || "",
+          content: m.content || "",
+          notes: m.notes || "",
+          attachments: m.attachments || [],
+          completedBy: []
+        })) || []) : [],
         enrolledStudents: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -312,7 +453,7 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
           </CardContent>
         </Card>
 
-        {courseType === "pdf_only" ? (
+        {courseType === "pdf_only" && (
           <Card className="border-border/50 shadow-lg">
             <CardHeader className="pb-4">
               <CardTitle className="text-2xl font-bold flex items-center gap-2">
@@ -321,7 +462,7 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
               </CardTitle>
               <CardDescription>Upload the main document for this course.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <div 
                 className="border-2 border-dashed border-muted-foreground/30 rounded-2xl p-8 text-center hover:bg-muted/30 transition-colors cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
@@ -341,9 +482,77 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
                   <p className="text-xs text-muted-foreground">PDF files up to 50MB</p>
                 </div>
               </div>
+
+              {/* AI Assessment Section for PDF-only course */}
+              <div className="pt-6 border-t border-border/50 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                      <Sparkles className="h-4 w-4 text-violet-500 animate-pulse" />
+                      Course Assessments (AI-Powered)
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Generate exam questions, quizzes, project tasks, and timesheet papers based on this PDF.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setAssistantOpen(true)}
+                    className="shrink-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white border-0 shadow-md gap-1.5 text-xs h-9 font-semibold"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Open AI Assistant
+                  </Button>
+                </div>
+
+                {/* Displaying Summary */}
+                {form.watch("sections")?.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(() => {
+                      const sections = form.watch("sections") || [];
+                      const quizSec = sections.find((s: any) => s.type === "quiz");
+                      const faSec = sections.find((s: any) => s.type === "final_assessment");
+                      
+                      return (
+                        <>
+                          <div className="p-3 bg-muted/20 border border-border/50 rounded-xl space-y-1">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Course Quiz</span>
+                            <span className="text-xs font-semibold block">
+                              {quizSec?.quiz?.questions?.length
+                                ? `${quizSec?.quiz?.questions?.length} Questions` 
+                                : "Not Generated"}
+                            </span>
+                          </div>
+                          <div className="p-3 bg-muted/20 border border-border/50 rounded-xl space-y-1">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Final Project</span>
+                            <span className="text-xs font-semibold block truncate">
+                              {faSec?.finalAssessment?.finalProjectInstructions 
+                                ? "Instructions Configured" 
+                                : "Not Generated"}
+                            </span>
+                          </div>
+                          <div className="p-3 bg-muted/20 border border-border/50 rounded-xl space-y-1">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Timesheet Guidelines</span>
+                            <span className="text-xs font-semibold block truncate">
+                              {faSec?.finalAssessment?.timePaperInstructions 
+                                ? "Guidelines Configured" 
+                                : "Not Generated"}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-muted/10 border border-dashed rounded-xl text-xs text-muted-foreground">
+                    No assessments generated yet. Click "Open AI Assistant" to begin!
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
-        ) : (
+        )}
+
         <div className="space-y-6">
           <div className="flex justify-between items-center bg-background/50 backdrop-blur-sm sticky top-0 py-4 z-10 border-b">
             <div className="flex items-center gap-2">
@@ -426,6 +635,8 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
                         register={form.register}
                         errors={form.formState.errors}
                         watch={form.watch}
+                        setValue={form.setValue}
+                        schoolSlug={schoolSlug}
                       />
                     )}
                     
@@ -480,12 +691,33 @@ export default function NewCoursePage({ params }: { params: Promise<{ schoolSlug
             )}
           </div>
         </div>
-        )}
 
         <Button type="submit" disabled={saving || (courseType === "structured" && sectionFields.length === 0)} className="w-full h-12 rounded-xl text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700 transition-all">
           {saving ? "Creating Course..." : "Create Course"}
         </Button>
       </form>
+
+      {assistantOpen && (
+        <AIAssessmentAssistant
+          open={assistantOpen}
+          onClose={() => setAssistantOpen(false)}
+          schoolSlug={schoolSlug}
+          coursePdfFile={pdfFile}
+          onApply={handleApplyAssessments}
+          initialQuizQuestions={(() => {
+            const quizSec = form.getValues("sections")?.find((s: any) => s.type === "quiz");
+            return quizSec?.quiz?.questions || [];
+          })()}
+          initialProjectInstructions={(() => {
+            const faSec = form.getValues("sections")?.find((s: any) => s.type === "final_assessment");
+            return faSec?.finalAssessment?.finalProjectInstructions || "";
+          })()}
+          initialTimesheetInstructions={(() => {
+            const faSec = form.getValues("sections")?.find((s: any) => s.type === "final_assessment");
+            return faSec?.finalAssessment?.timePaperInstructions || "";
+          })()}
+        />
+      )}
     </div>
   );
 }

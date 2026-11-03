@@ -12,6 +12,13 @@ export const quizSchema = z.object({
   passMark: z.number().min(0).max(100).optional(),
 });
 
+export const attachmentSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+  size: z.number().optional(),
+  type: z.string().optional(),
+});
+
 export const moduleSchema = z.object({
   title: z.string().min(1, "Module title is required"),
   videoUrl: z.string().optional(),
@@ -20,6 +27,7 @@ export const moduleSchema = z.object({
   completedBy: z.array(z.string()).optional(),
   type: z.string().optional(), // Kept for backwards compatibility
   description: z.string().optional(), // Kept for backwards compatibility
+  attachments: z.array(attachmentSchema).optional(),
 });
 
 export const caseStudySchema = z.object({

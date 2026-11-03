@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlayCircle, FileText, File, CheckCircle, Circle, ArrowLeft, BookOpen, Paperclip, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -282,6 +282,35 @@ export default function ModulePage({
                                             className="prose prose-base sm:prose-lg dark:prose-invert max-w-none whitespace-pre-wrap leading-relaxed text-muted-foreground/90 overflow-x-hidden break-words"
                                             dangerouslySetInnerHTML={{ __html: module.content }}
                                         />
+                                    </div>
+                                )}
+                                {module.attachments && module.attachments.length > 0 && (
+                                    <div className="border-t p-6 md:p-8 bg-muted/5">
+                                        <h4 className="font-bold text-base mb-4 flex items-center gap-2">
+                                            <Paperclip className="h-4 w-4 text-primary" />
+                                            Attachments & Resources ({module.attachments.length})
+                                        </h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {module.attachments.map((att: any, attIdx: number) => (
+                                                <a 
+                                                    key={attIdx} 
+                                                    href={att.url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:bg-muted/10 transition-colors group"
+                                                >
+                                                    <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 group-hover:bg-primary/20 transition-colors">
+                                                        <FileDown className="h-4 w-4" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors">{att.name}</p>
+                                                        {att.size && (
+                                                            <p className="text-[10px] text-muted-foreground">{(att.size / 1024).toFixed(1)} KB</p>
+                                                        )}
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </CardContent>

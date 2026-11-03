@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, ClipboardList } from "lucide-react";
+import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, ClipboardList, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CourseCurriculumListProps {
@@ -15,6 +15,8 @@ interface CourseCurriculumListProps {
   isSidebar?: boolean;
   activeItemType?: "module" | "quiz" | "case_study" | "final_assessment";
   activeIndex?: number;
+  enrolledAt?: Date | null;
+  courseStudyDuration?: number;
 }
 
 export default function CourseCurriculumList({
@@ -27,10 +29,17 @@ export default function CourseCurriculumList({
   isSidebar = false,
   activeItemType,
   activeIndex,
+  enrolledAt,
+  courseStudyDuration = 6,
 }: CourseCurriculumListProps) {
   if (!course) return null;
 
-  if (course.courseType === "pdf_only") {
+  const unlockDate = enrolledAt ? new Date(enrolledAt.getTime() + courseStudyDuration * 7 * 24 * 60 * 60 * 1000) : null;
+  const isTimeLocked = enrolledAt && unlockDate ? new Date() < unlockDate : false;
+
+  const showPdfCard = course.courseType === "pdf_only" && !isSidebar;
+
+  if (course.courseType === "pdf_only" && (!course.sections || course.sections.length === 0)) {
     if (isSidebar) return null; // No sidebar nav for single PDF course
     return (
       <div className="space-y-4">
@@ -70,6 +79,37 @@ export default function CourseCurriculumList({
   if (course.sections && course.sections.length > 0) {
     return (
       <div className={cn(isSidebar ? "space-y-4" : "space-y-10")}>
+        {showPdfCard && (
+          <Card className="mb-6 overflow-hidden transition-all duration-300 hover:shadow-md border-primary/30">
+            <CardHeader className="py-4">
+              <CardTitle className="text-base font-semibold flex items-center gap-3">
+                <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm transition-colors">
+                  <File className="h-4 w-4 text-red-500" />
+                </div>
+                Course Document (PDF)
+              </CardTitle>
+            </CardHeader>
+            {isEnrolled && course.pdfUrl && (
+              <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm">
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-muted-foreground">
+                    View or download the full course material.
+                  </div>
+                  <a href={course.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 gap-2">
+                    <FileText className="h-4 w-4" /> Open PDF
+                  </a>
+                </div>
+              </CardContent>
+            )}
+            {!isEnrolled && (
+              <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm">
+                <div className="mt-4 text-muted-foreground text-center">
+                  Enroll in the course to access the document.
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        )}
         {course.sections.map((section: any, sIdx: number) => {
           return (
             <div key={sIdx} className={cn(isSidebar ? "space-y-2" : "space-y-4")}>
@@ -195,35 +235,67 @@ export default function CourseCurriculumList({
                     const isActive = activeItemType === "quiz" && activeIndex === sIdx;
 
                     if (isSidebar) {
-                      return (
-                        <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`} key={`quiz-${sIdx}`}>
+                      const sidebarContent = (
+                        <div className={cn(
+                          "p-3 rounded-xl flex items-center gap-3 border border-transparent select-none",
+                          isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
+                          isTimeLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        )}>
                           <div className={cn(
-                            "p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3 group border border-transparent",
-                            isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
-                            !isActive && isCompleted && "opacity-70"
+                            "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
+                            isActive ? "bg-indigo-500 text-white border-indigo-500" : "bg-background group-hover:border-indigo-500/30 group-hover:text-indigo-500"
                           )}>
-                            <div className={cn(
-                              "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
-                              isActive ? "bg-indigo-500 text-white border-indigo-500" : "bg-background group-hover:border-indigo-500/30 group-hover:text-indigo-500"
-                            )}>
+                            {isTimeLocked ? (
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
                               <FileText className={cn("h-3.5 w-3.5", !isActive && "text-indigo-500")} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={cn(
-                                "text-xs font-bold truncate transition-colors",
-                                isActive ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground group-hover:text-foreground"
-                              )}>
-                                Section Quiz
-                              </p>
-                            </div>
-                            {isCompleted && (
-                              <CheckCircle className={cn(
-                                "h-3.5 w-3.5 shrink-0",
-                                isActive ? "text-indigo-500" : "text-green-500/50"
-                              )} />
                             )}
                           </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "text-xs font-bold truncate transition-colors",
+                              isActive ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground group-hover:text-foreground"
+                            )}>
+                              Section Quiz {isTimeLocked && "🔒"}
+                            </p>
+                          </div>
+                          {isCompleted && !isTimeLocked && (
+                            <CheckCircle className={cn(
+                              "h-3.5 w-3.5 shrink-0",
+                              isActive ? "text-indigo-500" : "text-green-500/50"
+                            )} />
+                          )}
+                        </div>
+                      );
+
+                      if (isTimeLocked) {
+                        return <div key={`quiz-${sIdx}`}>{sidebarContent}</div>;
+                      }
+
+                      return (
+                        <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`} key={`quiz-${sIdx}`}>
+                          {sidebarContent}
                         </Link>
+                      );
+                    }
+
+                    if (isTimeLocked) {
+                      return (
+                        <Card key={`quiz-${sIdx}`} className="overflow-hidden border-dashed bg-muted/20 border-border/60">
+                          <CardHeader className="py-4 flex flex-row items-center gap-4">
+                            <div className="shrink-0 p-1.5 rounded-md bg-background border border-border/50 shadow-sm text-muted-foreground">
+                              <Lock className="h-4 w-4 text-indigo-500/60" />
+                            </div>
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-semibold text-muted-foreground">
+                                Section Quiz (Locked)
+                              </CardTitle>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-xs text-muted-foreground">
+                            🔒 Locked until you complete {courseStudyDuration} weeks of active study (Unlocks on {unlockDate?.toLocaleDateString()}).
+                          </CardContent>
+                        </Card>
                       );
                     }
 
@@ -273,35 +345,67 @@ export default function CourseCurriculumList({
                     const isActive = activeItemType === "case_study" && activeIndex === sIdx;
 
                     if (isSidebar) {
-                      return (
-                        <Link href={`/${schoolSlug}/courses/${courseId}/case-study/${sIdx}`} key={`cs-${sIdx}`}>
+                      const sidebarContent = (
+                        <div className={cn(
+                          "p-3 rounded-xl flex items-center gap-3 border border-transparent select-none",
+                          isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
+                          isTimeLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        )}>
                           <div className={cn(
-                            "p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3 group border border-transparent",
-                            isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
-                            !isActive && isCompleted && "opacity-70"
+                            "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
+                            isActive ? "bg-orange-500 text-white border-orange-500" : "bg-background group-hover:border-orange-500/30 group-hover:text-orange-500"
                           )}>
-                            <div className={cn(
-                              "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
-                              isActive ? "bg-orange-500 text-white border-orange-500" : "bg-background group-hover:border-orange-500/30 group-hover:text-orange-500"
-                            )}>
+                            {isTimeLocked ? (
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
                               <FileText className={cn("h-3.5 w-3.5", !isActive && "text-orange-500")} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={cn(
-                                "text-xs font-bold truncate transition-colors",
-                                isActive ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground group-hover:text-foreground"
-                              )}>
-                                Case Study
-                              </p>
-                            </div>
-                            {isCompleted && (
-                              <CheckCircle className={cn(
-                                "h-3.5 w-3.5 shrink-0",
-                                isActive ? "text-orange-500" : "text-green-500/50"
-                              )} />
                             )}
                           </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "text-xs font-bold truncate transition-colors",
+                              isActive ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground group-hover:text-foreground"
+                            )}>
+                              Case Study {isTimeLocked && "🔒"}
+                            </p>
+                          </div>
+                          {isCompleted && !isTimeLocked && (
+                            <CheckCircle className={cn(
+                              "h-3.5 w-3.5 shrink-0",
+                              isActive ? "text-orange-500" : "text-green-500/50"
+                            )} />
+                          )}
+                        </div>
+                      );
+
+                      if (isTimeLocked) {
+                        return <div key={`cs-${sIdx}`}>{sidebarContent}</div>;
+                      }
+
+                      return (
+                        <Link href={`/${schoolSlug}/courses/${courseId}/case-study/${sIdx}`} key={`cs-${sIdx}`}>
+                          {sidebarContent}
                         </Link>
+                      );
+                    }
+
+                    if (isTimeLocked) {
+                      return (
+                        <Card key={`cs-${sIdx}`} className="overflow-hidden border-dashed bg-muted/20 border-border/60">
+                          <CardHeader className="py-4 flex flex-row items-center gap-4">
+                            <div className="shrink-0 p-1.5 rounded-md bg-background border border-border/50 shadow-sm text-muted-foreground">
+                              <Lock className="h-4 w-4 text-orange-500/60" />
+                            </div>
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-semibold text-muted-foreground">
+                                Case Study (Locked)
+                              </CardTitle>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-xs text-muted-foreground">
+                            🔒 Locked until you complete {courseStudyDuration} weeks of active study (Unlocks on {unlockDate?.toLocaleDateString()}).
+                          </CardContent>
+                        </Card>
                       );
                     }
 
@@ -351,35 +455,67 @@ export default function CourseCurriculumList({
                     const isActive = activeItemType === "final_assessment" && activeIndex === sIdx;
 
                     if (isSidebar) {
-                      return (
-                        <Link href={`/${schoolSlug}/courses/${courseId}/final-assessment/${sIdx}`} key={`fa-${sIdx}`}>
+                      const sidebarContent = (
+                        <div className={cn(
+                          "p-3 rounded-xl flex items-center gap-3 border border-transparent select-none",
+                          isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
+                          isTimeLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        )}>
                           <div className={cn(
-                            "p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3 group border border-transparent",
-                            isActive ? "bg-background border-border shadow-sm" : "hover:bg-background/50",
-                            !isActive && isCompleted && "opacity-70"
+                            "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
+                            isActive ? "bg-teal-500 text-white border-teal-500" : "bg-background group-hover:border-teal-500/30 group-hover:text-teal-500"
                           )}>
-                            <div className={cn(
-                              "shrink-0 p-1.5 rounded-lg border shadow-xs transition-colors",
-                              isActive ? "bg-teal-500 text-white border-teal-500" : "bg-background group-hover:border-teal-500/30 group-hover:text-teal-500"
-                            )}>
+                            {isTimeLocked ? (
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
                               <ClipboardList className={cn("h-3.5 w-3.5", !isActive && "text-teal-500")} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={cn(
-                                "text-xs font-bold truncate transition-colors",
-                                isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground group-hover:text-foreground"
-                              )}>
-                                Final Assessment
-                              </p>
-                            </div>
-                            {isCompleted && (
-                              <CheckCircle className={cn(
-                                "h-3.5 w-3.5 shrink-0",
-                                isActive ? "text-teal-500" : "text-green-500/50"
-                              )} />
                             )}
                           </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "text-xs font-bold truncate transition-colors",
+                              isActive ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground group-hover:text-foreground"
+                            )}>
+                              Final Assessment {isTimeLocked && "🔒"}
+                            </p>
+                          </div>
+                          {isCompleted && !isTimeLocked && (
+                            <CheckCircle className={cn(
+                              "h-3.5 w-3.5 shrink-0",
+                              isActive ? "text-teal-500" : "text-green-500/50"
+                            )} />
+                          )}
+                        </div>
+                      );
+
+                      if (isTimeLocked) {
+                        return <div key={`fa-${sIdx}`}>{sidebarContent}</div>;
+                      }
+
+                      return (
+                        <Link href={`/${schoolSlug}/courses/${courseId}/final-assessment/${sIdx}`} key={`fa-${sIdx}`}>
+                          {sidebarContent}
                         </Link>
+                      );
+                    }
+
+                    if (isTimeLocked) {
+                      return (
+                        <Card key={`fa-${sIdx}`} className="overflow-hidden border-dashed bg-muted/20 border-border/60">
+                          <CardHeader className="py-4 flex flex-row items-center gap-4">
+                            <div className="shrink-0 p-1.5 rounded-md bg-background border border-border/50 shadow-sm text-muted-foreground">
+                              <Lock className="h-4 w-4 text-teal-500/60" />
+                            </div>
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-semibold text-muted-foreground">
+                                Final Assessment (Locked)
+                              </CardTitle>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-xs text-muted-foreground">
+                            🔒 Locked until you complete {courseStudyDuration} weeks of active study (Unlocks on {unlockDate?.toLocaleDateString()}).
+                          </CardContent>
+                        </Card>
                       );
                     }
 

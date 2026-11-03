@@ -1,18 +1,476 @@
-rules_version='2'
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Root Collections:
+//
+// 1. schools/{schoolSlug}
+//    - name: string (optional)
+//    - primaryColor: string (optional)
+//    - bannerUrl: string (optional)
+//    - logoUrl: string (optional)
+//    - createdAt / updatedAt: timestamp (optional)
+//
+// 2. schools/{schoolSlug}/users/{userId}
+//    - uid: string (optional/matches userId)
+//    - email: string (required)
+//    - displayName: string (optional)
+//    - role: string in ['super-admin', 'admin', 'instructor', 'student']
+//    - invited: bool (optional)
+//    - inviteToken: string (optional)
+//    - inviteTokenExpiresAt: number (optional)
+//    - session: string (optional)
+//    - photoURL: string (optional)
+//    - membershipApplication: map (optional)
+//    - createdAt / updatedAt: timestamp (optional)
+//
+// 3. schools/{schoolSlug}/users/{userId}/notifications/{notificationId}
+//    - title: string
+//    - message: string
+//    - read: bool
+//    - createdAt: timestamp
+//
+// 4. schools/{schoolSlug}/courses/{courseId}
+//    - title: string
+//    - description: string
+//    - instructorId: string
+//    - enrolledStudents: list of userIds
+//    - sections: list
+//    - modules: list
+//    - createdAt / updatedAt: timestamp
+//
+// 5. schools/{schoolSlug}/courses/{courseId}/messages/{messageId}
+//    - text: string
+//    - senderId: string
+//    - senderName: string
+//    - createdAt: timestamp
+//
+// 6. schools/{schoolSlug}/courses/{courseId}/exercises/{exerciseId}
+//    - title: string
+//    - description: string
+//    - groups: list
+//    - submissions: map / list
+//
+// 7. schools/{schoolSlug}/courses/{courseId}/attendanceLogs/{logId}
+//    - studentId: string
+//    - status: string
+//    - timestamp / date: timestamp / string
+//
+// 8. schools/{schoolSlug}/courses/{courseId}/sessions/{sessionId}
+//    - title: string
+//    - startDateTime: timestamp / string
+//    - endDateTime: timestamp / string
+//    - meetingLink: string (optional)
+//
+// 9. schools/{schoolSlug}/enrollmentRequests/{requestId}
+//    - courseId: string
+//    - studentId: string
+//    - studentEmail: string
+//    - studentName: string
+//    - status: string ('pending', 'approved', 'declined')
+//    - paymentMethod: string
+//    - requestedAt: timestamp
+//    - decidedAt / decidedBy: timestamp / string
+//
+// 10. schools/{schoolSlug}/chats/{chatId}
+//     - participants: list of strings (userIds)
+//     - type: string ('direct', 'group', 'anonymous', 'course')
+//     - updatedAt / createdAt: timestamp
+//
+// 11. schools/{schoolSlug}/chats/{chatId}/messages/{messageId}
+//     - text: string
+//     - senderId: string
+//     - senderName: string
+//     - createdAt: timestamp
+//
+// 12. schools/{schoolSlug}/tasks/{taskId}
+//     - title: string
+//     - description: string
+//     - assignedTo: string (userId)
+//     - assignedToName: string
+//     - status: string ('pending', 'in-progress', 'completed')
+//     - createdAt: timestamp
+//
+// 13. schools/{schoolSlug}/submissions/{submissionId}
+//     - courseId: string
+//     - studentId: string
+//     - type: string ('case_study', 'final_assessment', etc.)
+//     - fileUrl / fileName: string
+//     - submittedAt: timestamp
+//     - graded: bool
+//     - score: number / null
+//
+// 14. schools/{schoolSlug}/settings/{settingId}
+//     - settingId == 'payment': bank info, paystack public key, courseStudyDuration (readable by authenticated members)
+//     - settingId == 'secrets': API keys, paystack secret key (restricted to super-admin & admin)
+//     - settingId == 'permissions': RBAC role config
+//
+// 15. users/{userId}/notes/{noteId}
+//     - courseId: string
+//     - title: string
+//     - content: string
+//     - checked: bool
+//     - createdAt: timestamp
+//
+// 16. certificates/{certificateId}
+//     - certificateId: string
+//     - schoolSlug: string
+//     - courseId: string
+//     - studentId: string
+//     - studentName: string
+//     - issuedAt: timestamp
+// ===============================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 7, 12);
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email.lower() == "devtonicllc@gmail.com" ||
+        (request.auth.token.role == "super-admin")
+      );
+    }
+
+    function getUserDoc(schoolSlug, uid) {
+      return get(/databases/$(database)/documents/schools/$(schoolSlug)/users/$(uid));
+    }
+
+    function userDocExists(schoolSlug, uid) {
+      return exists(/databases/$(database)/documents/schools/$(schoolSlug)/users/$(uid));
+    }
+
+    function getSchoolRole(schoolSlug) {
+      return userDocExists(schoolSlug, request.auth.uid)
+        ? getUserDoc(schoolSlug, request.auth.uid).data.role
+        : null;
+    }
+
+    function isSchoolAdmin(schoolSlug) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (request.auth.token.role in ['admin', 'super-admin']) ||
+        (getSchoolRole(schoolSlug) in ['admin', 'super-admin'])
+      );
+    }
+
+    function isSchoolInstructor(schoolSlug) {
+      return isAuthenticated() && (
+        isSchoolAdmin(schoolSlug) ||
+        (request.auth.token.role == 'instructor') ||
+        (getSchoolRole(schoolSlug) == 'instructor')
+      );
+    }
+
+    function isSchoolMember(schoolSlug) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        userDocExists(schoolSlug, request.auth.uid)
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Basic Bounds Checking to prevent DoS / resource exhaustion
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+
+    // ===============================================================
+    // Root Collection: schools/{schoolSlug}
+    // ===============================================================
+    match /schools/{schoolSlug} {
+      // Branding and settings can be loaded by anyone visiting the school subdomain/slug
+      allow read: if true;
+      allow create, update, delete: if isSuperAdmin();
+
+      // =============================================================
+      // Subcollection: users/{userId}
+      // =============================================================
+      match /users/{userId} {
+        // Reads allowed for:
+        // 1. School admins / super admins (for user management)
+        // 2. The user himself
+        // 3. Authenticated school members (for chat pickers, student lookups, directories)
+        // 4. Unauthenticated users query-checking an invite token during instructor onboarding
+        allow read: if isOwner(userId) ||
+                       isSchoolMember(schoolSlug) ||
+                       isSuperAdmin() ||
+                       (resource.data.inviteToken != null && resource.data.invited == true);
+
+        // Creates allowed for:
+        // - Self-signup: student creating their own doc (role must be student)
+        // - Super-admin syncing their own profile or creating profiles
+        // - School Admin creating/inviting students or instructors
+        // - Converting an invited placeholder into a real user doc
+        allow create: if isAuthenticated() && (
+          (isOwner(userId) && request.resource.data.role == 'student') ||
+          (isOwner(userId) && isSuperAdmin()) ||
+          (isOwner(userId) && request.resource.data.invited == false) ||
+          isSchoolAdmin(schoolSlug)
+        );
+
+        // Updates allowed for:
+        // - User updating their own profile (cannot escalate role or change email)
+        // - School admin managing roles and accounts
+        // - Super admin
+        allow update: if isAuthenticated() && (
+          isSuperAdmin() ||
+          isSchoolAdmin(schoolSlug) ||
+          (
+            isOwner(userId) &&
+            request.resource.data.role == resource.data.role &&
+            (!('email' in request.resource.data) || request.resource.data.email == resource.data.email)
+          )
+        );
+
+        // Deletions allowed for admins or during user profile consolidation (replacing placeholder)
+        allow delete: if isAuthenticated() && (
+          isSchoolAdmin(schoolSlug) ||
+          isOwner(userId) ||
+          resource.data.invited == true
+        );
+
+        // Subcollection: notifications
+        match /notifications/{notificationId} {
+          allow read: if isOwner(userId) || isSchoolAdmin(schoolSlug);
+          // Admins, instructors or course triggers can create notifications for students
+          allow create: if isAuthenticated();
+          allow update, delete: if isOwner(userId) || isSchoolAdmin(schoolSlug);
+        }
+      }
+
+      // =============================================================
+      // Subcollection: courses/{courseId}
+      // =============================================================
+      match /courses/{courseId} {
+        // Courses are publicly viewable or readable by authenticated users so visitors see available courses
+        allow read: if true;
+
+        // Creating and deleting courses restricted to instructors/admins
+        allow create: if isSchoolInstructor(schoolSlug);
+        allow delete: if isSchoolAdmin(schoolSlug);
+
+        // Updating courses:
+        // 1. Instructors and admins can edit course syllabus, details, settings
+        // 2. Enrolled students can update course to track their module/case-study progress
+        allow update: if isAuthenticated() && (
+          isSchoolInstructor(schoolSlug) ||
+          // Students marking module or case study completion
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['modules', 'sections', 'enrolledStudents'])
+          )
+        );
+
+        // Subcollection: messages (Course Discussion Forum)
+        match /messages/{messageId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() &&
+                           request.resource.data.senderId == request.auth.uid &&
+                           isValidString(request.resource.data.text, 1, 5000);
+          allow update, delete: if isSchoolAdmin(schoolSlug) ||
+                                   (isAuthenticated() && resource.data.senderId == request.auth.uid);
+        }
+
+        // Subcollection: exercises
+        match /exercises/{exerciseId} {
+          allow read: if isAuthenticated();
+          allow create, delete: if isSchoolInstructor(schoolSlug);
+          allow update: if isAuthenticated() && (
+            isSchoolInstructor(schoolSlug) ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['submissions', 'groups'])
+          );
+        }
+
+        // Subcollection: attendanceLogs
+        match /attendanceLogs/{logId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isSchoolInstructor(schoolSlug);
+        }
+
+        // Subcollection: sessions (Academic schedule & live sessions)
+        match /sessions/{sessionId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isSchoolInstructor(schoolSlug);
+        }
+      }
+
+      // =============================================================
+      // Subcollection: enrollmentRequests/{requestId}
+      // =============================================================
+      match /enrollmentRequests/{requestId} {
+        // Students can read their own enrollment requests; Admins can read all
+        allow read: if isAuthenticated() && (
+          isSchoolAdmin(schoolSlug) ||
+          resource.data.studentId == request.auth.uid
+        );
+
+        // A student can submit an enrollment request for themselves
+        allow create: if isAuthenticated() &&
+                         request.resource.data.studentId == request.auth.uid &&
+                         request.resource.data.status in ['pending', 'approved'];
+
+        // Status update / decision restricted to admin, or the student attaching proof
+        allow update: if isAuthenticated() && (
+          isSchoolAdmin(schoolSlug) ||
+          (resource.data.studentId == request.auth.uid && request.resource.data.studentId == request.auth.uid)
+        );
+
+        allow delete: if isSchoolAdmin(schoolSlug);
+      }
+
+      // =============================================================
+      // Subcollection: chats/{chatId}
+      // =============================================================
+      match /chats/{chatId} {
+        // Chat participants or school admins can read the chat thread
+        allow read: if isAuthenticated() && (
+          isSchoolAdmin(schoolSlug) ||
+          (request.auth.uid in resource.data.participants)
+        );
+
+        // Any authenticated user in the school can initiate a chat they participate in
+        allow create: if isAuthenticated() && (
+          (request.auth.uid in request.resource.data.participants) ||
+          isSchoolAdmin(schoolSlug)
+        );
+
+        // Update timestamps or participant lists
+        allow update: if isAuthenticated() && (
+          isSchoolAdmin(schoolSlug) ||
+          (request.auth.uid in resource.data.participants)
+        );
+
+        allow delete: if isSchoolAdmin(schoolSlug);
+
+        // Subcollection: messages (Direct / Group / Anonymous Messages)
+        match /messages/{messageId} {
+          allow read: if isAuthenticated() && (
+            isSchoolAdmin(schoolSlug) ||
+            (request.auth.uid in get(/databases/$(database)/documents/schools/$(schoolSlug)/chats/$(chatId)).data.participants)
+          );
+
+          allow create: if isAuthenticated() &&
+                           request.resource.data.senderId == request.auth.uid &&
+                           isValidString(request.resource.data.text, 1, 5000);
+
+          allow update, delete: if isSchoolAdmin(schoolSlug) ||
+                                   (isAuthenticated() && resource.data.senderId == request.auth.uid);
+        }
+      }
+
+      // =============================================================
+      // Subcollection: tasks/{taskId}
+      // =============================================================
+      match /tasks/{taskId} {
+        // Users can read tasks assigned to them; Instructors and Admins can view all tasks
+        allow read: if isAuthenticated() && (
+          isSchoolInstructor(schoolSlug) ||
+          resource.data.assignedTo == request.auth.uid
+        );
+
+        // Instructors and Admins can create tasks
+        allow create: if isSchoolInstructor(schoolSlug) &&
+                         isValidString(request.resource.data.title, 1, 200);
+
+        // Instructors can update anything; Assigned users can toggle status to completed
+        allow update: if isAuthenticated() && (
+          isSchoolInstructor(schoolSlug) ||
+          (
+            resource.data.assignedTo == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+            request.resource.data.status in ['pending', 'in-progress', 'completed']
+          )
+        );
+
+        allow delete: if isSchoolInstructor(schoolSlug);
+      }
+
+      // =============================================================
+      // Subcollection: submissions/{submissionId}
+      // =============================================================
+      match /submissions/{submissionId} {
+        // Students can read their own submissions; Instructors and Admins can view all submissions for grading
+        allow read: if isAuthenticated() && (
+          isSchoolInstructor(schoolSlug) ||
+          resource.data.studentId == request.auth.uid
+        );
+
+        // Students can upload submissions
+        allow create: if isAuthenticated() &&
+                         request.resource.data.studentId == request.auth.uid &&
+                         request.resource.data.type in ['case_study', 'final_assessment', 'timesheet', 'exercise'];
+
+        // Students can re-upload files before grading; Instructors can assign grades/scores
+        allow update: if isAuthenticated() && (
+          isSchoolInstructor(schoolSlug) ||
+          (
+            resource.data.studentId == request.auth.uid &&
+            request.resource.data.studentId == request.auth.uid &&
+            resource.data.graded != true
+          )
+        );
+
+        allow delete: if isSchoolAdmin(schoolSlug);
+      }
+
+      // =============================================================
+      // Subcollection: settings/{settingId}
+      // =============================================================
+      match /settings/{settingId} {
+        // General payment settings and public school parameters are readable by authenticated members or visitors
+        allow read: if settingId == 'payment' || isSchoolAdmin(schoolSlug);
+
+        // Secrets (API keys, paystack private secret) only readable and writable by admins
+        allow write: if isSchoolAdmin(schoolSlug);
+      }
+    }
+
+    // ===============================================================
+    // Top-level Collection: users/{userId}/notes/{noteId}
+    // ===============================================================
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isSuperAdmin();
+
+      match /notes/{noteId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ===============================================================
+    // Top-level Collection: certificates/{certificateId}
+    // ===============================================================
+    match /certificates/{certificateId} {
+      // Anyone can verify a public certificate via its ID
+      allow read: if true;
+
+      // Generating certificate doc: authenticated student matching studentId or school admin
+      allow create, update: if isAuthenticated() && (
+        request.resource.data.studentId == request.auth.uid ||
+        isSuperAdmin()
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ===============================================================
+    // Collection Group: users
+    // ===============================================================
+    // Needed for unauthenticated or authenticated instructor invite token lookup across school tenants
+    match /{path=**}/users/{userDocId} {
+      allow read: if resource.data.inviteToken != null;
     }
   }
 }

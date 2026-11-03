@@ -199,16 +199,18 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight">Manage Courses</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Create, edit, and manage all courses in your school.
+                            {isAdmin ? "Create, edit, and manage all courses in your school." : "View and edit courses assigned to you."}
                         </p>
                     </div>
-                    <Link
-                        href={`/${schoolSlug}/admin/courses/new`}
-                        className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 gap-2"
-                    >
-                        <PlusCircle className="h-4 w-4" />
-                        Add Course
-                    </Link>
+                    {isAdmin && (
+                        <Link
+                            href={`/${schoolSlug}/admin/courses/new`}
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 gap-2"
+                        >
+                            <PlusCircle className="h-4 w-4" />
+                            Add Course
+                        </Link>
+                    )}
                 </div>
 
                 <Card className="border-border/50 shadow-sm">

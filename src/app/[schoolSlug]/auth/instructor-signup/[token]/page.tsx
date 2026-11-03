@@ -1,11 +1,12 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import {
     collection,
+    collectionGroup,
     query,
     where,
     getDocs,
@@ -50,10 +51,46 @@ export default function InstructorSignupPage({
     // ── Validate token on mount ────────────────────────────────────────────────
     useEffect(() => {
         async function validateToken() {
+            const cleanToken = token ? token.trim() : "";
+
+            // Step 1: Try server-side API check
+            try {
+                const response = await fetch("/api/users/check", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ inviteToken: cleanToken, schoolSlug }),
+                });
+
+                if (response.ok) {
+                    const resData = await response.json();
+
+                    if (resData.exists) {
+                        setPlaceholderId(resData.placeholderId);
+                        setLockedEmail(resData.email || "");
+                        setAdminName(resData.displayName || "");
+                        setFullName(resData.displayName || ""); // pre-fill with admin's name
+                        setValidating(false);
+                        return;
+                    }
+                }
+            } catch (apiErr) {
+                console.warn("API invite verification failed, attempting client-side fallback:", apiErr);
+            }
+
+            // Step 2: Fallback to direct client-side Firestore verification
             try {
                 const usersRef = collection(db, "schools", schoolSlug, "users");
-                const q = query(usersRef, where("inviteToken", "==", token));
-                const snap = await getDocs(q);
+                let q = query(usersRef, where("inviteToken", "==", cleanToken));
+                let snap = await getDocs(q);
+
+                if (snap.empty) {
+                    // Search across collectionGroup in case of schoolSlug casing mismatch
+                    const groupRef = collectionGroup(db, "users");
+                    q = query(groupRef, where("inviteToken", "==", cleanToken));
+                    snap = await getDocs(q);
+                }
 
                 if (snap.empty) {
                     setTokenError("This invite link is invalid or has already been used.");
@@ -61,23 +98,22 @@ export default function InstructorSignupPage({
                     return;
                 }
 
-                const userDoc = snap.docs[0];
-                const data = userDoc.data();
+                const docData = snap.docs[0].data();
+                const placeholderDocId = snap.docs[0].id;
 
-                // Check expiry
-                if (data.inviteTokenExpiresAt && Date.now() > data.inviteTokenExpiresAt) {
+                if (docData.inviteTokenExpiresAt && Date.now() > docData.inviteTokenExpiresAt) {
                     setTokenError("This invite link has expired. Please ask your admin to resend the invite.");
                     setValidating(false);
                     return;
                 }
 
-                setPlaceholderId(userDoc.id);
-                setLockedEmail(data.email || "");
-                setAdminName(data.displayName || "");
-                setFullName(data.displayName || ""); // pre-fill with admin's name
+                setPlaceholderId(placeholderDocId);
+                setLockedEmail(docData.email || "");
+                setAdminName(docData.displayName || "");
+                setFullName(docData.displayName || "");
                 setValidating(false);
-            } catch (err) {
-                console.error(err);
+            } catch (clientErr) {
+                console.error("Client invite verification error:", clientErr);
                 setTokenError("Something went wrong while verifying your invite. Please try again.");
                 setValidating(false);
             }
@@ -105,65 +141,75 @@ export default function InstructorSignupPage({
 
         setLoading(true);
         try {
+            let user;
             // Create Firebase Auth account with the locked email
-            let userCredential;
             try {
-                userCredential = await createUserWithEmailAndPassword(auth, lockedEmail, password);
+                const userCredential = await createUserWithEmailAndPassword(auth, lockedEmail, password);
+                user = userCredential.user;
             } catch (err: any) {
                 if (err.code === "auth/email-already-in-use") {
-                    toast.error("An account with this email already exists. Please sign in instead.");
+                    // Try signing in with existing account using the entered password
+                    try {
+                        const signInCred = await signInWithEmailAndPassword(auth, lockedEmail, password);
+                        user = signInCred.user;
+                    } catch (signInErr: any) {
+                        toast.error("An account with this email already exists. Please enter your existing password to claim your instructor invite.");
+                        setLoading(false);
+                        return;
+                    }
                 } else {
                     toast.error(err.message || "Failed to create account.");
+                    setLoading(false);
+                    return;
                 }
-                setLoading(false);
-                return;
             }
-
-            const user = userCredential.user;
 
             try {
                 // Update Firebase Auth display name
-                await updateProfile(user, { displayName: fullName.trim() });
+                if (user) {
+                    await updateProfile(user, { displayName: fullName.trim() });
 
-                // Move placeholder doc to real UID doc & clear token
-                const newDocRef = doc(db, "schools", schoolSlug, "users", user.uid);
-                const oldDocRef = doc(db, "schools", schoolSlug, "users", placeholderId);
+                    // Move placeholder doc to real UID doc & clear token
+                    const newDocRef = doc(db, "schools", schoolSlug, "users", user.uid);
+                    const oldDocRef = doc(db, "schools", schoolSlug, "users", placeholderId);
 
-                // Read old doc data first (already have it, but update in place if same id)
-                const usersRef = collection(db, "schools", schoolSlug, "users");
-                const q = query(usersRef, where("inviteToken", "==", token));
-                const snap = await getDocs(q);
-                const existingData = snap.docs[0]?.data() ?? {};
+                    // Read old doc data
+                    const groupRef = collectionGroup(db, "users");
+                    const q = query(groupRef, where("inviteToken", "==", token.trim()));
+                    const snap = await getDocs(q);
+                    const existingData = snap.docs[0]?.data() ?? {};
 
-                // Write to new UID-keyed doc
-                const { setDoc } = await import("firebase/firestore");
-                await setDoc(newDocRef, {
-                    ...existingData,
-                    displayName: fullName.trim(),
-                    email: lockedEmail,
-                    uid: user.uid,
-                    role: "instructor",
-                    invited: false,
-                    inviteToken: null,
-                    inviteTokenExpiresAt: null,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                });
+                    // Write to new UID-keyed doc
+                    const { setDoc } = await import("firebase/firestore");
+                    await setDoc(newDocRef, {
+                        ...existingData,
+                        displayName: fullName.trim(),
+                        email: lockedEmail,
+                        uid: user.uid,
+                        role: "instructor",
+                        invited: false,
+                        inviteToken: null,
+                        inviteTokenExpiresAt: null,
+                        createdAt: existingData.createdAt || serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    });
 
-                // Delete old placeholder doc (if different)
-                if (placeholderId !== user.uid) {
-                    const { deleteDoc } = await import("firebase/firestore");
-                    await deleteDoc(oldDocRef);
+                    // Delete old placeholder doc (if different)
+                    if (placeholderId && placeholderId !== user.uid) {
+                        try {
+                            const { deleteDoc } = await import("firebase/firestore");
+                            await deleteDoc(oldDocRef);
+                        } catch (_) {}
+                    }
+
+                    setDone(true);
+                    toast.success("Account set up successfully! Welcome aboard.");
+
+                    setTimeout(() => {
+                        router.push(`/${schoolSlug}/dashboard`);
+                    }, 1500);
                 }
-
-                setDone(true);
-                toast.success("Account created! Welcome aboard.");
-
-                setTimeout(() => {
-                    router.push(`/${schoolSlug}/dashboard`);
-                }, 2000);
             } catch (firestoreErr) {
-                await user.delete();
                 console.error(firestoreErr);
                 toast.error("Failed to finalise your account. Please try again.");
             }

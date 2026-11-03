@@ -9,8 +9,8 @@ import {
     collection,
     onSnapshot,
     doc,
-    updateDoc,
     deleteDoc,
+    updateDoc,
     query,
     orderBy,
     serverTimestamp,
@@ -309,7 +309,9 @@ function InviteDialog({ schoolSlug }: { schoolSlug: string }) {
 
             // For instructors: generate a token client-side and store it
             const inviteToken = role === "instructor"
-                ? crypto.randomUUID()
+                ? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                    ? crypto.randomUUID()
+                    : `token_${Date.now()}_${Math.random().toString(36).substring(2)}`)
                 : null;
             const inviteTokenExpiresAt = inviteToken
                 ? Date.now() + 7 * 24 * 60 * 60 * 1000
@@ -469,27 +471,25 @@ function DeleteDialog({
     async function handleDelete() {
         setDeleting(true);
         try {
-            // First, delete the user from Firebase Authentication
-            const response = await fetch("/api/users/delete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ uid: user.id, email: user.email }),
-            });
-
-            const result = await response.json();
-            
-            if (!response.ok && result.error !== "Failed to delete from Auth") {
-                throw new Error(result.error || "Failed to delete from Firebase Auth");
+            // Step 1: Attempt Firebase Auth deletion via API route (if configured)
+            try {
+                await fetch("/api/users/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ uid: user.id, email: user.email, schoolSlug }),
+                });
+            } catch (apiErr) {
+                console.warn("API delete call warning:", apiErr);
             }
 
-            // Then, delete from Firestore
+            // Step 2: Delete user document directly from Firestore
             await deleteDoc(doc(db, "schools", schoolSlug, "users", user.id));
-            
-            toast.success(`${user.displayName} removed.`);
+
+            toast.success(`${user.displayName} removed successfully.`);
             onClose();
-        } catch (err) {
-            console.error(err);
-            toast.error("Failed to remove user.");
+        } catch (err: any) {
+            console.error("Delete user error:", err);
+            toast.error(err.message || "Failed to remove user.");
             setDeleting(false);
         }
     }
@@ -804,8 +804,9 @@ export default function UsersPage({
                                                         <div className="flex items-center gap-3">
                                                             <Avatar className="h-9 w-9 border shrink-0">
                                                                 <AvatarImage
-                                                                    src={`https://api.dicebear.com/7.x/notionists/svg?seed=${u.id}`}
+                                                                    src={(u as any).photoURL || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.id}`}
                                                                     alt={u.displayName}
+                                                                    className="object-cover"
                                                                 />
                                                                 <AvatarFallback className="text-xs font-semibold">
                                                                     {initials}

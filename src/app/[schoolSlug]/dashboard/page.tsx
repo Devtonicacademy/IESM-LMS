@@ -19,6 +19,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { PageLoading } from "@/components/page-loading";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage({ params }: { params: Promise<{ schoolSlug: string }> }) {
@@ -33,7 +34,7 @@ export default function DashboardPage({ params }: { params: Promise<{ schoolSlug
   }, [user, loading, router, schoolSlug]);
 
   if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading dashboard...</div>;
+    return <PageLoading message="Loading dashboard..." fullScreen />;
   }
 
   return (
@@ -42,22 +43,27 @@ export default function DashboardPage({ params }: { params: Promise<{ schoolSlug
       <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
         
         {/* Everyone sees their tasks */}
-        <UserTasksWidget schoolSlug={schoolSlug} userUid={user.uid} />
+        <div id="tour-tasks-section">
+          <UserTasksWidget schoolSlug={schoolSlug} userUid={user.uid} />
+        </div>
 
-        {/* Admin Section */}
-        {isAdmin && (
-          <AdminDashboardStats schoolSlug={schoolSlug} />
-        )}
+        {/* Dashboard Overview Content */}
+        <div id="tour-overview-content" className="space-y-8">
+          {/* Admin Section */}
+          {isAdmin && (
+            <AdminDashboardStats schoolSlug={schoolSlug} />
+          )}
 
-        {/* Instructor Section */}
-        {isInstructor && (
-          <InstructorDashboard schoolSlug={schoolSlug} userUid={user.uid} />
-        )}
+          {/* Instructor Section */}
+          {isInstructor && (
+            <InstructorDashboard schoolSlug={schoolSlug} userUid={user.uid} />
+          )}
 
-        {/* Student Section */}
-        {isStudent && (
-          <StudentEnrollments schoolSlug={schoolSlug} userUid={user.uid} />
-        )}
+          {/* Student Section */}
+          {isStudent && (
+            <StudentEnrollments schoolSlug={schoolSlug} userUid={user.uid} />
+          )}
+        </div>
 
       </div>
     </div>

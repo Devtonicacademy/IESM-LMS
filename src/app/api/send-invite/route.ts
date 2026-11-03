@@ -9,7 +9,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://iesm-lms-app-2026.web.app';
+    const origin = req.headers.get("origin") || req.headers.get("referer");
+    const host = req.headers.get("host");
+    const protocol = host && (host.includes("localhost") || host.includes("127.0.0.1")) ? "http" : "https";
+
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    if (!baseUrl && origin) {
+      try {
+        baseUrl = new URL(origin).origin;
+      } catch (_) {}
+    }
+    if (!baseUrl && host) {
+      baseUrl = `${protocol}://${host}`;
+    }
+    if (!baseUrl) {
+      baseUrl = 'https://devtonic-lms.web.app';
+    }
+
     const inviteUrl = `${baseUrl}/${schoolSlug}/auth/instructor-signup/${token}`;
 
     const transporter = nodemailer.createTransport({
@@ -18,7 +34,7 @@ export async function POST(req: Request) {
       secure: true,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        pass: process.env.SMTP_PASS?.replace(/['"]/g, '').trim(),
       },
     });
 

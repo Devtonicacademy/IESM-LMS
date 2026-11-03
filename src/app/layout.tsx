@@ -21,8 +21,9 @@ export const metadata: Metadata = {
 
 import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
-
 import { ThemeProvider } from "@/components/theme-provider";
+import { NavigationLoadingIndicator } from "@/components/navigation-loading-indicator";
+import { TourProvider } from "@/components/tour-guide";
 
 export default function RootLayout({
   children,
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${montserrat.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background`}
       >
         <ThemeProvider
@@ -41,8 +43,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            {children}
-            <Toaster position="top-center" richColors />
+            <TourProvider>
+              <NavigationLoadingIndicator />
+              {children}
+              <Toaster position="top-center" richColors />
+            </TourProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

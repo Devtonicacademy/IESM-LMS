@@ -18,6 +18,7 @@ export function SectionQuizEditor({
     errors,
     watch,
     setValue,
+    isAdmin = true,
 }: {
     sectionIndex: number;
     control: any;
@@ -25,6 +26,7 @@ export function SectionQuizEditor({
     errors: any;
     watch: any;
     setValue: any;
+    isAdmin?: boolean;
 }) {
     const sectionTitle = watch(`sections.${sectionIndex}.title`);
     const quizExists = watch(`sections.${sectionIndex}.quiz`);
@@ -110,6 +112,14 @@ export function SectionQuizEditor({
     };
 
     if (!quizExists) {
+        if (!isAdmin) {
+            return (
+                <div className="pt-4 mt-4 border-t border-border/50 text-xs text-muted-foreground italic">
+                    Quizzes and questions can only be added or modified by course administrators.
+                </div>
+            );
+        }
+
         return (
             <div className="pt-4 mt-4 border-t border-border/50">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-muted/10 border border-dashed border-border/50">
@@ -143,25 +153,32 @@ export function SectionQuizEditor({
 
     return (
         <div className="pt-6 mt-6 border-t border-border/50">
+            {!isAdmin && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-xl text-xs font-medium mb-4">
+                    Quiz questions are view-only for instructors and can only be modified by course administrators.
+                </div>
+            )}
             <div className="flex items-center justify-between mb-4 px-2">
                 <div className="flex items-center gap-2">
                     <HelpCircle className="h-5 w-5 text-primary" />
                     <h4 className="font-bold text-foreground">Section Quiz</h4>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(5, false)} disabled={generating} className="gap-2">
-                        <Sparkles className="h-3 w-3 text-indigo-500" />
-                        {generating ? "Generating..." : "Regenerate 5 AI Questions"}
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(1, true)} disabled={generating} className="gap-2">
-                        <Sparkles className="h-3 w-3 text-indigo-500" />
-                        {generating ? "Generating..." : "Add 1 AI Question"}
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={handleRemoveQuiz} className="text-destructive hover:bg-destructive/10 gap-2">
-                        <Trash2 className="h-3 w-3" />
-                        Remove Quiz
-                    </Button>
-                </div>
+                {isAdmin && (
+                    <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(5, false)} disabled={generating} className="gap-2">
+                            <Sparkles className="h-3 w-3 text-indigo-500" />
+                            {generating ? "Generating..." : "Regenerate 5 AI Questions"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateAI(1, true)} disabled={generating} className="gap-2">
+                            <Sparkles className="h-3 w-3 text-indigo-500" />
+                            {generating ? "Generating..." : "Add 1 AI Question"}
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleRemoveQuiz} className="text-destructive hover:bg-destructive/10 gap-2">
+                            <Trash2 className="h-3 w-3" />
+                            Remove Quiz
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-6">
@@ -178,17 +195,19 @@ export function SectionQuizEditor({
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 className="p-5 border border-primary/20 bg-primary/5 rounded-2xl relative group"
                             >
-                                <div className="absolute top-4 right-4">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => remove(qIndex)}
-                                        className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
+                                {isAdmin && (
+                                    <div className="absolute top-4 right-4">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => remove(qIndex)}
+                                            className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
 
                                 <div className="space-y-4">
                                     <div>
@@ -196,6 +215,7 @@ export function SectionQuizEditor({
                                         <Input
                                             {...register(`${baseName}.question`)}
                                             placeholder="What is the main purpose of..."
+                                            disabled={!isAdmin}
                                             className={cn("h-11 rounded-xl bg-background", qErrors?.question && "border-destructive")}
                                         />
                                         {qErrors?.question && (
@@ -211,10 +231,12 @@ export function SectionQuizEditor({
                                                 <div key={optIndex} className="flex items-center gap-3">
                                                     <button
                                                         type="button"
-                                                        onClick={() => setValue(`${baseName}.correctAnswer`, optIndex)}
+                                                        disabled={!isAdmin}
+                                                        onClick={() => isAdmin && setValue(`${baseName}.correctAnswer`, optIndex)}
                                                         className={cn(
                                                             "flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
-                                                            isCorrect ? "border-green-500 bg-green-500/10 text-green-500" : "border-muted-foreground/30 hover:border-primary/50 text-transparent"
+                                                            isCorrect ? "border-green-500 bg-green-500/10 text-green-500" : "border-muted-foreground/30 hover:border-primary/50 text-transparent",
+                                                            !isAdmin && "cursor-not-allowed opacity-75"
                                                         )}
                                                     >
                                                         <CheckCircle2 className="w-4 h-4 fill-current" />
@@ -223,6 +245,7 @@ export function SectionQuizEditor({
                                                         <Input
                                                             {...register(`${baseName}.options.${optIndex}`)}
                                                             placeholder={`Option ${optIndex + 1}`}
+                                                            disabled={!isAdmin}
                                                             className={cn("h-10 rounded-lg bg-background/50", qErrors?.options?.[optIndex] && "border-destructive")}
                                                         />
                                                     </div>
@@ -239,15 +262,17 @@ export function SectionQuizEditor({
                     })}
                 </AnimatePresence>
 
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => append({ id: crypto.randomUUID(), question: "", options: ["", "", "", ""], correctAnswer: 0 })}
-                    className="w-full border-dashed py-6 rounded-xl text-primary hover:bg-primary/5"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Another Question
-                </Button>
+                {isAdmin && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => append({ id: crypto.randomUUID(), question: "", options: ["", "", "", ""], correctAnswer: 0 })}
+                        className="w-full border-dashed py-6 rounded-xl text-primary hover:bg-primary/5"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Another Question
+                    </Button>
+                )}
             </div>
         </div>
     );

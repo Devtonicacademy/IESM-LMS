@@ -1,20 +1,26 @@
 "use client";
 
 import { use, useEffect, useState, useMemo } from "react";
-import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, getDoc, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, BookOpen, ShoppingCart, Trash2, CheckCircle, Wallet, Loader2 } from "lucide-react";
+import { Search, BookOpen, ShoppingCart, Trash2, CheckCircle, Wallet, Loader2, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { toast } from "sonner";
-import { PaystackButton } from "react-paystack";
+import dynamic from "next/dynamic";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const PaystackButton = dynamic(
+  () => import("react-paystack").then((mod) => mod.PaystackButton),
+  { ssr: false }
+);
 
 const SESSIONS = ["First Academic Session", "Second Academic Session", "Third Academic Session"];
 
@@ -36,6 +42,19 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
   const [paystackSettings, setPaystackSettings] = useState<{enabled: boolean, publicKey: string} | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
+  const [selectedStage, setSelectedStage] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  const categories = useMemo(() => {
+    const list = new Set<string>();
+    allCourses.forEach(c => {
+      if (c.category) {
+        list.add(c.category);
+      }
+    });
+    return Array.from(list);
+  }, [allCourses]);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -45,11 +64,12 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
         setAllCourses(coursesData);
 
         if (user) {
-          const enrollmentsQ = query(collection(db, "schools", schoolSlug, "enrollmentRequests"));
+          const enrollmentsQ = query(
+            collection(db, "schools", schoolSlug, "enrollmentRequests"),
+            where("studentId", "==", user.uid)
+          );
           const enrollmentsSnap = await getDocs(enrollmentsQ);
-          const enrollmentsData = enrollmentsSnap.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((e: any) => e.studentId === user.uid);
+          const enrollmentsData = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setEnrollments(enrollmentsData);
         }
 
@@ -138,10 +158,25 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
     return allCourses.filter(c => {
       const matchesSearch = c.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesSession = !isStudent || (c.session || "First Academic Session") === userSession;
-      return matchesSearch && matchesSession;
+      
+      const courseSession = c.session || "First Academic Session";
+      let matchesStage = true;
+      if (selectedStage === "stage_1") {
+        matchesStage = courseSession === "First Academic Session";
+      } else if (selectedStage === "stage_2") {
+        matchesStage = courseSession === "Second Academic Session";
+      } else if (selectedStage === "stage_3") {
+        matchesStage = courseSession === "Third Academic Session";
+      }
+
+      let matchesCategory = true;
+      if (selectedCategory !== "all") {
+        matchesCategory = c.category === selectedCategory;
+      }
+
+      return matchesSearch && matchesStage && matchesCategory;
     });
-  }, [allCourses, searchTerm, isStudent, userSession]);
+  }, [allCourses, searchTerm, selectedStage, selectedCategory]);
 
   const toggleCart = (course: any) => {
     if (cart.find(c => c.id === course.id)) {
@@ -280,28 +315,60 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
     <div className="flex flex-col flex-1 w-full">
       <DashboardTopbar breadcrumb="Course Catalog" />
       <div className="p-8 max-w-7xl mx-auto w-full relative">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-2">Course Catalog</h1>
             <p className="text-muted-foreground">Discover and enroll in available classes.</p>
             {isStudent && (
               <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                {userSession}
+                Your Current Session: {userSession}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative w-full md:w-80">
+          
+          <div className="flex flex-col sm:flex-row flex-1 gap-4 items-stretch sm:items-center w-full lg:max-w-3xl lg:justify-end">
+            <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search courses..." 
-                className="pl-9 h-10 bg-card"
+                className="pl-9 h-10 bg-card rounded-xl"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            
+            <div className="w-full sm:w-44">
+              <Select value={selectedStage} onValueChange={(val) => setSelectedStage(val || "all")}>
+                <SelectTrigger className="h-10 bg-card rounded-xl">
+                  <SelectValue placeholder="All Stages" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stages</SelectItem>
+                  <SelectItem value="stage_1">Stage 1</SelectItem>
+                  <SelectItem value="stage_2">Stage 2</SelectItem>
+                  <SelectItem value="stage_3">Stage 3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {categories.length > 0 && (
+              <div className="w-full sm:w-44">
+                <Select value={selectedCategory} onValueChange={(val) => setSelectedCategory(val || "all")}>
+                  <SelectTrigger className="h-10 bg-card rounded-xl">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {isStudent && (
-              <Button variant="outline" className="relative h-10 px-4" onClick={() => setShowCart(true)}>
+              <Button variant="outline" className="relative h-10 px-4 rounded-xl shrink-0" onClick={() => setShowCart(true)}>
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Cart
                 {cart.length > 0 && (
@@ -344,8 +411,29 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.05 * i }}
                 >
-                  <Card className="h-full flex flex-col hover:border-primary transition-colors hover:shadow-sm">
+                  <Card className="h-full flex flex-col hover:border-primary transition-colors hover:shadow-sm relative overflow-hidden">
                     <CardHeader>
+                      <div className="flex flex-wrap gap-2 items-center mb-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          (course.session || "First Academic Session") === "Third Academic Session"
+                            ? "bg-amber-500/10 text-amber-700 border-amber-500/20"
+                            : (course.session || "First Academic Session") === "Second Academic Session"
+                            ? "bg-purple-500/10 text-purple-700 border-purple-500/20"
+                            : "bg-blue-500/10 text-blue-700 border-blue-500/20"
+                        }`}>
+                          { (course.session || "First Academic Session") === "Third Academic Session"
+                            ? "Stage 3"
+                            : (course.session || "First Academic Session") === "Second Academic Session"
+                            ? "Stage 2"
+                            : "Stage 1"
+                          }
+                        </span>
+                        {course.category && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-500/10 text-gray-700 border border-gray-500/20">
+                            {course.category}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex justify-between items-start mb-2">
                         <CardTitle className="line-clamp-2 text-lg">{course.title}</CardTitle>
                       </div>
@@ -379,6 +467,10 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
                           <div className="w-full text-center py-2 text-sm font-medium text-yellow-600 bg-yellow-500/10 rounded-md">
                             Enrollment Pending
                           </div>
+                        ) : (course.session || "First Academic Session") !== userSession ? (
+                          <Button variant="outline" className="w-full gap-2 border-dashed text-muted-foreground" disabled>
+                            <Lock className="h-4 w-4" /> Locked (Stage Promotion Required)
+                          </Button>
                         ) : inCart ? (
                           <Button variant="secondary" className="w-full" onClick={() => toggleCart(course)}>
                             Remove from Cart
@@ -410,12 +502,12 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
 
       {/* Cart Dialog */}
       <Dialog open={showCart} onOpenChange={setShowCart}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col overflow-y-auto overflow-x-hidden">
+          <DialogHeader className="min-w-0">
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-primary" /> Your Cart
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               Review your selected courses before checkout. (Max 4 active courses per session)
             </DialogDescription>
           </DialogHeader>
@@ -428,12 +520,12 @@ export default function CoursesCatalogPage({ params }: { params: Promise<{ schoo
             <div className="space-y-4 my-4">
               <div className="space-y-3">
                 {cart.map((course, idx) => (
-                  <div key={idx} className="flex justify-between items-center p-3 rounded-lg bg-muted/50 border border-border/50">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-sm line-clamp-1">{course.title}</span>
+                  <div key={idx} className="flex justify-between items-center gap-4 p-3 rounded-lg bg-muted/50 border border-border/50">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-semibold text-sm break-words">{course.title}</span>
                       <span className="text-xs text-muted-foreground">{course.price > 0 ? `₦${course.price.toLocaleString()}` : "Free"}</span>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => toggleCart(course)} className="text-destructive h-8 w-8 hover:bg-destructive/10">
+                    <Button variant="ghost" size="icon" onClick={() => toggleCart(course)} className="text-destructive h-8 w-8 hover:bg-destructive/10 shrink-0">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
