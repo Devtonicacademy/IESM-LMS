@@ -18,11 +18,16 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
-import { PaystackButton } from "react-paystack";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const PaystackButton = dynamic(
+  () => import("react-paystack").then((mod) => mod.PaystackButton),
+  { ssr: false }
+);
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, Award, ClipboardList, Wallet } from "lucide-react";
+import { BookOpen, CheckCircle, Circle, PlayCircle, FileText, File, Award, ClipboardList, Wallet, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -31,6 +36,8 @@ import CourseSchedule from "@/components/course/course-schedule";
 import StudentNotes from "@/components/course/student-notes";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { generateCertificate } from "@/lib/generate-certificate";
+import CourseCurriculumList from "@/components/course/course-curriculum-list";
+import { cn } from "@/lib/utils";
 
 interface AttendanceLogEntry {
   id: string;
@@ -69,6 +76,25 @@ export default function CourseDetailPage({
   const [bankSettings, setBankSettings] = useState<{bankName: string, accountName: string, accountNumber: string} | null>(null);
   const [paystackSettings, setPaystackSettings] = useState<{enabled: boolean, publicKey: string} | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [courseStudyDuration, setCourseStudyDuration] = useState<number>(6);
+  const [enrolledAtDate, setEnrolledAtDate] = useState<Date | null>(null);
+  const [exercises, setExercises] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchExercises() {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "schools", schoolSlug, "courses", courseId, "exercises"), orderBy("createdAt", "desc"))
+        );
+        setExercises(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error("Failed to load exercises", err);
+      }
+    }
+    if (user) {
+      fetchExercises();
+    }
+  }, [schoolSlug, courseId, user]);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -86,6 +112,7 @@ export default function CourseDetailPage({
             enabled: !!data.paystackEnabled,
             publicKey: data.paystackPublicKey || "",
           });
+          setCourseStudyDuration(data.courseStudyDuration !== undefined ? Number(data.courseStudyDuration) : 6);
         }
       } catch (err) {
         console.error("Failed to load settings", err);
@@ -123,7 +150,12 @@ export default function CourseDetailPage({
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
-          setEnrollmentStatus(snap.docs[0].data().status as any);
+          const docData = snap.docs[0].data();
+          setEnrollmentStatus(docData.status as any);
+          const dateVal = docData.decidedAt || docData.requestedAt || docData.createdAt;
+          if (dateVal) {
+            setEnrolledAtDate(dateVal.toDate ? dateVal.toDate() : new Date(dateVal));
+          }
         }
       } catch (err) {
         console.error(err);
@@ -167,6 +199,8 @@ export default function CourseDetailPage({
 
   const isEnrolled = user && course.enrolledStudents?.includes(user.uid);
   const canManage = isAdmin || isInstructor;
+  const unlockDate = enrolledAtDate ? new Date(enrolledAtDate.getTime() + courseStudyDuration * 7 * 24 * 60 * 60 * 1000) : null;
+  const isTimeLocked = enrolledAtDate && unlockDate ? new Date() < unlockDate : false;
 
   const handleEnroll = async (confirmedPayment = false) => {
     if (!user) { toast.error("Please log in to enroll"); return; }
@@ -341,34 +375,40 @@ export default function CourseDetailPage({
   ].filter((t) => t.show);
 
   return (
-    <div className="flex flex-col flex-1 w-full">
+    <div className="flex flex-col flex-1 w-full min-w-0 overflow-x-hidden">
       <DashboardTopbar breadcrumb={`Course Catalog / ${course.title}`} />
-      <div className="p-8 max-w-5xl mx-auto w-full">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight mb-3">{course.title}</h1>
-            <p className="text-lg text-muted-foreground whitespace-pre-wrap mb-4">{course.description}</p>
+      <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto w-full min-w-0">
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 w-full">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 min-w-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 break-words">{course.title}</h1>
+            <p className="text-base sm:text-lg text-muted-foreground whitespace-pre-wrap mb-4 break-words">{course.description}</p>
             {course.price > 0 && (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 font-medium font-mono">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 font-medium font-mono text-sm">
                 ₦{course.price.toLocaleString()}
               </div>
             )}
             {(!course.price || course.price === 0) && (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium text-sm">
                 Free Course
               </div>
             )}
           </div>
           <div className="shrink-0 w-full md:w-auto">
             {isEnrolled ? (
-              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
-                <div className="text-sm font-medium text-primary mb-1">Your Progress</div>
-                <div className="text-2xl font-bold">{progressPercent}%</div>
-                <div className="w-full bg-primary/20 h-2 rounded-full mt-2 mb-3 overflow-hidden">
-                  <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-                </div>
-                {isFullyCompleted && isStudent && (
+              <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-center min-w-[180px]">
+                <div className="text-xs font-semibold uppercase tracking-wider text-primary/80 mb-0.5">Status</div>
+                {course.courseType === "pdf_only" ? (
+                  <div className="text-base sm:text-lg font-bold text-primary mt-1 mb-1 whitespace-nowrap">Enrolled & Active</div>
+                ) : (
+                  <>
+                    <div className="text-xl sm:text-2xl font-bold">{progressPercent}%</div>
+                    <div className="w-full bg-primary/20 h-2 rounded-full mt-1.5 mb-2 overflow-hidden">
+                      <div className="bg-primary h-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+                    </div>
+                  </>
+                )}
+                {isFullyCompleted && isStudent && course.courseType !== "pdf_only" && (
                   <Button
                     size="sm"
                     variant="default"
@@ -386,17 +426,26 @@ export default function CourseDetailPage({
                   </Button>
                 )}
               </div>
+            ) : isStudent && (course.session || "First Academic Session") !== (user?.session || "First Academic Session") ? (
+              <div className="bg-muted/80 border border-border/80 rounded-xl p-4 text-center max-w-sm">
+                <div className="text-sm font-semibold text-muted-foreground mb-1 flex items-center justify-center gap-1.5">
+                  <Lock className="h-4 w-4" /> Locked Course
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  This course belongs to the <strong>{course.session || "First Academic Session"}</strong>. Complete all courses in your current session (<strong>{user?.session || "First Academic Session"}</strong>) to unlock.
+                </p>
+              </div>
             ) : canManage ? (
-              <Link href={`/${schoolSlug}/admin/courses/new`}>
+              <Link href={`/${schoolSlug}/admin/courses/${courseId}/edit`}>
                 <Button variant="outline" size="lg">Edit Course</Button>
               </Link>
             ) : enrollmentStatus === "pending" ? (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 text-center">
                 <div className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-1">⏳ Pending Approval</div>
                 <p className="text-xs text-muted-foreground">Your enrollment request is awaiting admin review.</p>
               </div>
             ) : enrollmentStatus === "declined" ? (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-center">
                 <div className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">❌ Request Declined</div>
                 <p className="text-xs text-muted-foreground">Contact administration for more information.</p>
               </div>
@@ -409,7 +458,7 @@ export default function CourseDetailPage({
         </div>
 
         <Tabs defaultValue="content">
-          <TabsList className="flex w-full mb-6">
+          <TabsList className="flex w-full mb-6 overflow-x-auto">
             {tabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
             ))}
@@ -421,205 +470,24 @@ export default function CourseDetailPage({
                 <h2 className="text-2xl font-bold flex items-center">
                   <BookOpen className="mr-2 h-6 w-6 text-primary" /> Curriculum
                 </h2>
-                {isEnrolled && (
+                {isEnrolled && course.courseType !== "pdf_only" && (
                   <div className="text-sm font-medium text-muted-foreground">
                     {completedCount} / {totalModules} Completed
                   </div>
                 )}
               </div>
 
-              {course.sections && course.sections.length > 0 ? (
-                <div className="space-y-10">
-                  {course.sections.map((section: any, sIdx: number) => (
-                    <div key={sIdx} className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                          {sIdx + 1}
-                        </div>
-                        <h3 className="text-xl font-bold tracking-tight">{section.title}</h3>
-                      </div>
-
-                      <div className="grid gap-4">
-                        {section.modules?.map((mod: any, mIdx: number) => {
-                          const previousModulesCount = course.sections
-                            .slice(0, sIdx)
-                            .reduce((acc: number, s: any) => acc + (s.modules?.length || 0), 0);
-                          const finalIndex = previousModulesCount + mIdx;
-                          const isCompleted = user && mod.completedBy?.includes(user.uid);
-
-                          return (
-                            <Card key={mIdx} className={`overflow-hidden transition-all duration-300 hover:shadow-md ${isCompleted ? "bg-muted/30 border-primary/20" : "hover:border-primary/30"}`}>
-                              <CardHeader className="py-4 flex flex-row items-center gap-4">
-                                {isEnrolled && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      toggleModuleCompletion(finalIndex, Boolean(isCompleted));
-                                    }}
-                                    className="shrink-0 transition-all hover:scale-110 focus:outline-none z-10"
-                                  >
-                                    {isCompleted ? (
-                                      <CheckCircle className="h-6 w-6 text-primary fill-primary/10" />
-                                    ) : (
-                                      <Circle className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-                                    )}
-                                  </button>
-                                )}
-                                <Link
-                                  href={`/${schoolSlug}/courses/${courseId}/modules/${finalIndex}`}
-                                  className="flex-1 group"
-                                >
-                                  <CardTitle className="text-base font-semibold flex items-center gap-3 group-hover:text-primary transition-colors">
-                                    <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                      {mod.type === "video" ? (
-                                        <PlayCircle className="h-4 w-4 text-blue-500" />
-                                      ) : mod.type === "pdf" ? (
-                                        <File className="h-4 w-4 text-red-500" />
-                                      ) : (
-                                        <FileText className="h-4 w-4 text-green-500" />
-                                      )}
-                                    </div>
-                                    {mod.title}
-                                  </CardTitle>
-                                </Link>
-                              </CardHeader>
-                              {isEnrolled && (
-                                <Link href={`/${schoolSlug}/courses/${courseId}/modules/${finalIndex}`}>
-                                  <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                                    <div className="mt-4 flex items-center justify-between">
-                                      {mod.type === "video" && mod.content.includes("http") ? (
-                                        <div className="inline-flex items-center gap-2 text-primary font-medium group-hover:underline">
-                                          <PlayCircle className="h-4 w-4" />
-                                          Watch Video Lesson
-                                        </div>
-                                      ) : (
-                                        <div className="text-muted-foreground line-clamp-2 italic">
-                                          {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
-                                        </div>
-                                      )}
-                                      <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                                        Open Lesson →
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Link>
-                              )}
-                            </Card>
-                          );
-                        })}
-                        
-                        {section.quiz && section.quiz.questions?.length > 0 && (
-                          <Card className={`overflow-hidden transition-all duration-300 hover:shadow-md ${user && section.quiz.passedBy?.some((p:any) => p.uid === user?.uid) ? "bg-green-500/10 border-green-500/30" : "hover:border-primary/30"}`}>
-                            <CardHeader className="py-4 flex flex-row items-center gap-4">
-                              {isEnrolled && (
-                                <div className="shrink-0 z-10">
-                                  {user && section.quiz.passedBy?.some((p:any) => p.uid === user?.uid) ? (
-                                    <CheckCircle className="h-6 w-6 text-green-500 fill-green-500/10" />
-                                  ) : (
-                                    <Circle className="h-6 w-6 text-muted-foreground transition-colors" />
-                                  )}
-                                </div>
-                              )}
-                              <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`} className="flex-1 group">
-                                <CardTitle className="text-base font-semibold flex items-center gap-3 lg:group-hover:text-primary transition-colors">
-                                  <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                    <FileText className="h-4 w-4 text-indigo-500" />
-                                  </div>
-                                   Section Quiz
-                                </CardTitle>
-                              </Link>
-                            </CardHeader>
-                            {isEnrolled && (
-                               <Link href={`/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`}>
-                                 <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                                   <div className="mt-4 flex items-center justify-between">
-                                     <div className="inline-flex items-center gap-2 text-indigo-500 font-medium group-hover:underline">
-                                       Take Quiz ({section.quiz.questions.length} questions)
-                                     </div>
-                                     <div className="text-xs font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                       Start →
-                                     </div>
-                                   </div>
-                                 </CardContent>
-                               </Link>
-                            )}
-                          </Card>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {course.modules?.map((mod: any, i: number) => {
-                    const isCompleted = user && mod.completedBy?.includes(user.uid);
-                    return (
-                      <Card key={i} className={`transition-all duration-300 ${isCompleted ? "bg-muted/30 border-primary/30" : "hover:border-primary/30"}`}>
-                        <CardHeader className="py-4 flex flex-row items-center gap-4">
-                          {isEnrolled && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                toggleModuleCompletion(i, Boolean(isCompleted));
-                              }}
-                              className="shrink-0 hover:scale-110 transition-transform focus:outline-none z-10"
-                            >
-                              {isCompleted ? (
-                                <CheckCircle className="h-6 w-6 text-primary fill-primary/10" />
-                              ) : (
-                                <Circle className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-                              )}
-                            </button>
-                          )}
-                          <Link
-                            href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}
-                            className="flex-1 group"
-                          >
-                            <CardTitle className="text-lg flex items-center gap-3 font-semibold group-hover:text-primary transition-colors">
-                              <div className="p-1.5 rounded-md bg-background border border-border/50 shadow-sm group-hover:border-primary/30 transition-colors">
-                                {mod.type === "video" ? (
-                                  <PlayCircle className="h-4 w-4 text-blue-500" />
-                                ) : mod.type === "pdf" ? (
-                                  <File className="h-4 w-4 text-red-500" />
-                                ) : (
-                                  <FileText className="h-4 w-4 text-green-500" />
-                                )}
-                              </div>
-                              {mod.title}
-                            </CardTitle>
-                          </Link>
-                        </CardHeader>
-                        {isEnrolled && (
-                          <Link href={`/${schoolSlug}/courses/${courseId}/modules/${i}`}>
-                            <CardContent className="pt-0 pb-5 px-6 border-t border-border/5 text-sm cursor-pointer hover:bg-muted/10 transition-colors group">
-                              <div className="mt-4 flex items-center justify-between">
-                                {mod.type === "video" && mod.content.includes("http") ? (
-                                  <div className="inline-flex items-center gap-2 text-primary font-medium group-hover:underline">
-                                    <PlayCircle className="h-4 w-4" />
-                                    Watch Video Lesson
-                                  </div>
-                                ) : (
-                                  <div className="text-muted-foreground line-clamp-2 italic">
-                                    {mod.content.replace(/<[^>]+>/g, '').substring(0, 100)}...
-                                  </div>
-                                )}
-                                <div className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                                  Open Lesson →
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Link>
-                        )}
-                      </Card>
-                    );
-                  })}
-                  {(!course.modules || course.modules.length === 0) && (
-                    <div className="p-12 text-center text-muted-foreground border-2 border-dashed rounded-2xl bg-muted/5">
-                      <BookOpen className="h-10 w-10 mx-auto mb-4 opacity-20" />
-                      <p>No modules have been added to this course yet.</p>
-                    </div>
-                  )}
-                </div>
+              {course && (
+                <CourseCurriculumList
+                  course={course}
+                  schoolSlug={schoolSlug}
+                  courseId={courseId}
+                  user={user}
+                  isEnrolled={Boolean(isEnrolled)}
+                  onToggleModuleCompletion={toggleModuleCompletion}
+                  enrolledAt={enrolledAtDate}
+                  courseStudyDuration={courseStudyDuration}
+                />
               )}
             </div>
           </TabsContent>
@@ -631,6 +499,9 @@ export default function CourseDetailPage({
               courseName={course.title}
               enrolledStudents={course.enrolledStudents || []}
               modules={course.modules || []}
+              sections={course.sections || []}
+              enrolledAt={enrolledAtDate}
+              courseStudyDuration={courseStudyDuration}
             />
           </TabsContent>
 
@@ -717,24 +588,174 @@ export default function CourseDetailPage({
           )}
 
           <TabsContent value="exercises">
-            <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                <ClipboardList className="h-8 w-8 text-white" />
+            <div className="space-y-6">
+              {/* Header with redirect / management button */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/40">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Exercises & Assessments</h3>
+                  <p className="text-xs text-muted-foreground">Built-in curriculum activities, quizzes, case studies, and homework assignments.</p>
+                </div>
+                <Link href={`/${schoolSlug}/courses/${courseId}/exercises`}>
+                  <Button size="sm" variant="outline" className="gap-2 font-medium">
+                    <ClipboardList className="h-4 w-4 text-violet-500" />
+                    {canManage ? "Manage Classroom Exercises" : "Classroom Exercises Dashboard"}
+                  </Button>
+                </Link>
               </div>
-              <div>
-                <h3 className="text-xl font-bold mb-1">Exercises & Assignments</h3>
-                <p className="text-muted-foreground text-sm max-w-sm">
-                  {canManage
-                    ? "Create exercises, manage student groups, and grade performance."
-                    : "View your assigned exercises and check your scores."}
-                </p>
+
+              {/* Grid of assessments */}
+              <div className="grid gap-4">
+                {/* 1. Built-in Section Quizzes, Case Studies, and Final Assessments */}
+                {course.sections?.map((section: any, sIdx: number) => {
+                  const items = [];
+                  
+                  if (section.quiz && section.quiz.questions?.length > 0) {
+                    const isCompleted = user && section.quiz.passedBy?.some((p: any) => p.uid === user?.uid);
+                    const quizResult = user ? section.quiz.passedBy?.find((p: any) => p.uid === user?.uid) : null;
+                    items.push({
+                      title: `Section ${sIdx + 1}: ${section.title} (Quiz)`,
+                      type: "Quiz",
+                      link: `/${schoolSlug}/courses/${courseId}/quiz/${sIdx}`,
+                      isCompleted,
+                      score: quizResult ? `${quizResult.score}%` : null,
+                      locked: isTimeLocked,
+                    });
+                  }
+
+                  if (section.caseStudy) {
+                    const isCompleted = user && section.caseStudy.completedBy?.some((p: any) => p.uid === user?.uid);
+                    const caseResult = user ? section.caseStudy.completedBy?.find((p: any) => p.uid === user?.uid) : null;
+                    items.push({
+                      title: `Section ${sIdx + 1}: ${section.title} (Case Study)`,
+                      type: "Case Study",
+                      link: `/${schoolSlug}/courses/${courseId}/case-study/${sIdx}`,
+                      isCompleted,
+                      score: caseResult ? `Submitted` : null,
+                      locked: isTimeLocked,
+                    });
+                  }
+
+                  if (section.finalAssessment) {
+                    const isCompleted = user && section.finalAssessment.passedBy?.some((p: any) => p.uid === user?.uid);
+                    const examResult = user ? section.finalAssessment.passedBy?.find((p: any) => p.uid === user?.uid) : null;
+                    items.push({
+                      title: `Final assessment: ${section.title}`,
+                      type: "Final Exam",
+                      link: `/${schoolSlug}/courses/${courseId}/final-assessment/${sIdx}`,
+                      isCompleted,
+                      score: examResult ? `${examResult.score}%` : null,
+                      locked: isTimeLocked,
+                    });
+                  }
+
+                  return items.map((item, idx) => (
+                    <Card key={`${sIdx}-${idx}`} className={cn(
+                      "transition-all duration-300 hover:shadow-md",
+                      item.isCompleted ? "border-green-500/20 bg-green-500/5" : item.locked ? "opacity-60" : "hover:border-primary/20"
+                    )}>
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border",
+                              item.type === "Quiz" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                              item.type === "Case Study" ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" :
+                              "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                            )}>
+                              {item.type}
+                            </span>
+                            {item.locked && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Lock className="h-3 w-3" /> Locked
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-sm text-foreground truncate">{item.title}</h4>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {item.score && (
+                            <span className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">
+                              Score: {item.score}
+                            </span>
+                          )}
+                          
+                          {item.locked ? (
+                            <Button size="sm" variant="outline" disabled className="gap-1.5 text-xs text-muted-foreground">
+                              <Lock className="h-3.5 w-3.5" /> Locked
+                            </Button>
+                          ) : item.isCompleted ? (
+                            <Link href={item.link}>
+                              <Button size="sm" variant="outline" className="gap-1 text-xs border-green-500/20 text-green-600 hover:bg-green-500/10">
+                                Review
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Link href={item.link}>
+                              <Button size="sm" className="gap-1 text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm">
+                                Start Activity
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ));
+                })}
+
+                {/* 2. Classroom Exercises & Assignments */}
+                {exercises.map((ex: any) => {
+                  // Determine score/grade
+                  const scoreObj = user ? (ex.isGroupWork 
+                    ? ex.groups?.find((g: any) => g.members?.some((m: any) => m.uid === user.uid))
+                    : ex.individualScores?.[user.uid]) : null;
+                  const isCompleted = !!scoreObj;
+                  const scoreText = scoreObj && scoreObj.score !== undefined ? `${scoreObj.score}/${ex.maxScore}` : null;
+
+                  return (
+                    <Card key={ex.id} className={cn(
+                      "transition-all duration-300 hover:shadow-md",
+                      isCompleted ? "border-green-500/20 bg-green-500/5" : "hover:border-primary/20"
+                    )}>
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-violet-500/10 text-violet-500 border-violet-500/20">
+                              {ex.isGroupWork ? "Group Work" : "Individual Homework"}
+                            </span>
+                            {ex.dueDate && (
+                              <span className="text-[10px] text-muted-foreground">
+                                Due: {new Date(ex.dueDate).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-sm text-foreground truncate">{ex.title}</h4>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {scoreText && (
+                            <span className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">
+                              Grade: {scoreText}
+                            </span>
+                          )}
+                          <Link href={`/${schoolSlug}/courses/${courseId}/exercises`}>
+                            <Button size="sm" variant="outline" className="gap-1 text-xs border-violet-500/20 text-violet-500 hover:bg-violet-500/10">
+                              Open Assignment
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {/* Empty State */}
+                {(!course.sections || course.sections.length === 0) && exercises.length === 0 && (
+                  <div className="border border-dashed rounded-xl p-8 text-center text-muted-foreground text-sm">
+                    No quizzes, case studies, or exercises scheduled for this course.
+                  </div>
+                )}
               </div>
-              <Link href={`/${schoolSlug}/courses/${courseId}/exercises`}>
-                <Button className="gap-2 bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white border-0 shadow-md">
-                  <ClipboardList className="h-4 w-4" />
-                  {canManage ? "Manage Exercises" : "View Exercises"}
-                </Button>
-              </Link>
             </div>
           </TabsContent>
 

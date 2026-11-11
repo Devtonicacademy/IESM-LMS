@@ -2,13 +2,13 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Circle, Trophy } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Trophy, Lock } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
@@ -18,7 +18,7 @@ export default function TakeQuizPage({
     params: Promise<{ schoolSlug: string; courseId: string; sectionIndex: string }>;
 }) {
     const { schoolSlug, courseId, sectionIndex } = use(params);
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, isAdmin, isInstructor } = useAuth();
     const router = useRouter();
 
     const [course, setCourse] = useState<any>(null);
@@ -26,6 +26,9 @@ export default function TakeQuizPage({
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [submitted, setSubmitted] = useState(false);
     const [score, setScore] = useState(0);
+    const [isLocked, setIsLocked] = useState(false);
+    const [unlockDate, setUnlockDate] = useState<Date | null>(null);
+    const [studyDuration, setStudyDuration] = useState<number>(6);
 
     const sIdx = parseInt(sectionIndex, 10);
 
@@ -35,25 +38,84 @@ export default function TakeQuizPage({
             return;
         }
 
-        async function fetchCourse() {
+        async function fetchCourseAndLockStatus() {
             try {
+                // 1. Fetch course
                 const ref = doc(db, "schools", schoolSlug, "courses", courseId);
                 const snap = await getDoc(ref);
-                if (snap.exists()) {
-                    setCourse({ id: snap.id, ...snap.data() });
-                } else {
+                if (!snap.exists()) {
                     toast.error("Course not found");
+                    setLoading(false);
+                    return;
+                }
+                const cData = { id: snap.id, ...snap.data() };
+                setCourse(cData);
+
+                if (isAdmin || isInstructor) {
+                    setLoading(false);
+                    return;
+                }
+
+                // 2. Fetch duration settings
+                let duration = 6;
+                const settingsRef = doc(db, "schools", schoolSlug, "settings", "payment");
+                const settingsSnap = await getDoc(settingsRef);
+                if (settingsSnap.exists()) {
+                    const sData = settingsSnap.data();
+                    if (sData.courseStudyDuration !== undefined) {
+                        duration = Number(sData.courseStudyDuration);
+                        setStudyDuration(duration);
+                    }
+                }
+
+                // 3. Fetch enrollment date
+                const q = query(
+                    collection(db, "schools", schoolSlug, "enrollmentRequests"),
+                    where("courseId", "==", courseId),
+                    where("studentId", "==", user!.uid),
+                    where("status", "==", "approved")
+                );
+                const enrollSnap = await getDocs(q);
+                if (!enrollSnap.empty) {
+                    const eData = enrollSnap.docs[0].data();
+                    const dateVal = eData.decidedAt || eData.requestedAt || eData.createdAt;
+                    if (dateVal) {
+                        const enrolledDate = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+                        const unlock = new Date(enrolledDate.getTime() + duration * 7 * 24 * 60 * 60 * 1000);
+                        setUnlockDate(unlock);
+                        if (new Date() < unlock) {
+                            setIsLocked(true);
+                        }
+                    }
                 }
             } catch (err) {
-                console.error("Failed to load course", err);
+                console.error("Failed to load course details and lock settings", err);
             } finally {
                 setLoading(false);
             }
         }
-        if (user) fetchCourse();
-    }, [user, authLoading, schoolSlug, courseId, router]);
+        if (user) fetchCourseAndLockStatus();
+    }, [user, authLoading, schoolSlug, courseId, router, isAdmin, isInstructor]);
 
     if (loading || authLoading) return <div className="py-20 text-center animate-pulse">Loading quiz...</div>;
+
+    if (isLocked) {
+        return (
+            <div className="py-20 text-center space-y-6 max-w-lg mx-auto px-4">
+                <div className="p-4 bg-muted/60 rounded-full w-16 h-16 flex items-center justify-center mx-auto text-primary border shadow-sm">
+                    <Lock className="h-8 w-8" />
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">Assessment is Locked</h2>
+                <p className="text-muted-foreground leading-relaxed text-sm">
+                    To ensure sufficient preparation, you must study this course for a minimum of <strong>{studyDuration} weeks</strong>. This assessment will become available on <strong>{unlockDate?.toLocaleDateString()}</strong>.
+                </p>
+                <Link href={`/${schoolSlug}/courses/${courseId}`}>
+                    <Button className="mt-4">Back to Course Details</Button>
+                </Link>
+            </div>
+        );
+    }
+
     if (!course) return <div className="py-20 text-center text-muted-foreground">Course not found.</div>;
 
     const section = course.sections?.[sIdx];

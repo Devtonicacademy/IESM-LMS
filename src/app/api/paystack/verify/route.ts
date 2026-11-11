@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, where, getDocs, setDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { sendIntroMessage } from "@/lib/sendIntroMessage";
 
 export async function POST(req: Request) {
   try {
@@ -95,6 +96,9 @@ export async function POST(req: Request) {
           await setDoc(courseRef, {
             enrolledStudents: [...enrolled, uid]
           }, { merge: true });
+          
+          // Send automated intro message
+          await sendIntroMessage(schoolSlug, courseId, courseName || courseData.title || "Unknown Course", uid, studentName);
         }
       }
     }

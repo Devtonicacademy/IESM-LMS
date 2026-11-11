@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "devtonic-lms"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

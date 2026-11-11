@@ -12,6 +12,9 @@ const SUPER_ADMIN_EMAIL = "devtonicllc@gmail.com";
 export type AppUser = User & {
   role?: "super-admin" | "admin" | "instructor" | "student";
   schoolId?: string;
+  session?: string;
+  firestorePhotoURL?: string | null;
+  firestoreDisplayName?: string | null;
 };
 
 interface AuthContextType {
@@ -45,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       if (firebaseUser) {
         let role: "super-admin" | "admin" | "instructor" | "student" | undefined = undefined;
+        let session: string | undefined = undefined;
 
         // 1. Check if hardcoded super-admin email
         if (firebaseUser.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
@@ -52,11 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 2. Check Firestore for role (override or set if not super-admin)
+        let firestorePhotoURL: string | null = null;
+        let firestoreDisplayName: string | null = null;
         if (schoolSlug) {
           const userDocRef = doc(db, "schools", schoolSlug, "users", firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
-            const firestoreRole = userDoc.data().role as any;
+            const firestoreData = userDoc.data();
+            const firestoreRole = firestoreData.role as any;
+            session = firestoreData.session as string | undefined;
+            // Read Firestore-stored photoURL and displayName (updated by profile page)
+            firestorePhotoURL = firestoreData.photoURL || null;
+            firestoreDisplayName = firestoreData.displayName || null;
             // Only update role if it's not already hardcoded super-admin, 
             // OR if firestore specifically says they are a super-admin now.
             if (role !== "super-admin" || firestoreRole === "super-admin") {
@@ -80,10 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...firebaseUser,
           role: role,
           schoolId: schoolSlug,
+          session: session,
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
+          // Prefer Firestore values (updated by profile page) over Firebase Auth values
+          displayName: firestoreDisplayName ?? firebaseUser.displayName,
+          photoURL: firestorePhotoURL ?? firebaseUser.photoURL,
+          firestorePhotoURL,
+          firestoreDisplayName,
         } as AppUser;
 
         // Sync hardcoded super-admin to Firestore if missing

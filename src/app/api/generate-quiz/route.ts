@@ -1,15 +1,28 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export async function POST(req: Request) {
     try {
-        const { topic, count = 5, contents = [] } = await req.json();
+        const { topic, count = 5, contents = [], schoolSlug, userApiKey } = await req.json();
 
         if (!topic) {
             return NextResponse.json({ error: "Missing topic" }, { status: 400 });
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.GEMINI_API_KEY || userApiKey || req.headers.get("x-gemini-api-key");
+
+        if (!apiKey && schoolSlug) {
+            try {
+                const secretsSnap = await getDoc(doc(db, "schools", schoolSlug, "settings", "secrets"));
+                if (secretsSnap.exists()) {
+                    apiKey = secretsSnap.data()?.aiApiKey;
+                }
+            } catch (err) {
+                console.error("Error fetching saved aiApiKey:", err);
+            }
+        }
 
         // If no API key, return a mock response
         if (!apiKey) {

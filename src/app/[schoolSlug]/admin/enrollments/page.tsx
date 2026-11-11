@@ -17,6 +17,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { sendIntroMessage } from "@/lib/sendIntroMessage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -104,6 +105,9 @@ export default function AdminEnrollmentsPage({
         await updateDoc(doc(db, "schools", schoolSlug, "courses", request.courseId), {
           enrolledStudents: arrayUnion(request.studentId),
         });
+
+        // Send automated intro message
+        await sendIntroMessage(schoolSlug, request.courseId, request.courseName, request.studentId, request.studentName);
       }
 
       // 3. Create in-app notification for student

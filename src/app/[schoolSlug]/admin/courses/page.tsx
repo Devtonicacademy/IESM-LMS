@@ -11,9 +11,10 @@ import {
     doc,
     deleteDoc,
     query,
-    orderBy,
     updateDoc,
+    orderBy,
 } from "firebase/firestore";
+import { sendIntroMessage } from "@/lib/sendIntroMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,7 +143,7 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
         }
     }
 
-    async function toggleEnrollment(studentId: string, isEnrolled: boolean) {
+    async function toggleEnrollment(studentId: string, studentName: string, isEnrolled: boolean) {
         if (!enrollTarget) return;
         try {
             const courseRef = doc(db, "schools", schoolSlug, "courses", enrollTarget.id);
@@ -152,6 +153,12 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
 
             await updateDoc(courseRef, { enrolledStudents: newEnrolled });
             setEnrollTarget({ ...enrollTarget, enrolledStudents: newEnrolled });
+            
+            if (!isEnrolled) {
+                // Send automated intro message when enrolling
+                await sendIntroMessage(schoolSlug, enrollTarget.id, enrollTarget.title, studentId, studentName);
+            }
+            
             toast.success(isEnrolled ? "Student removed" : "Student enrolled");
         } catch (err) {
             console.error(err);
@@ -192,16 +199,18 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight">Manage Courses</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Create, edit, and manage all courses in your school.
+                            {isAdmin ? "Create, edit, and manage all courses in your school." : "View and edit courses assigned to you."}
                         </p>
                     </div>
-                    <Link
-                        href={`/${schoolSlug}/admin/courses/new`}
-                        className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 gap-2"
-                    >
-                        <PlusCircle className="h-4 w-4" />
-                        Add Course
-                    </Link>
+                    {isAdmin && (
+                        <Link
+                            href={`/${schoolSlug}/admin/courses/new`}
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 gap-2"
+                        >
+                            <PlusCircle className="h-4 w-4" />
+                            Add Course
+                        </Link>
+                    )}
                 </div>
 
                 <Card className="border-border/50 shadow-sm">
@@ -338,7 +347,7 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                                             size="sm"
                                             variant={isEnrolled ? "outline" : "default"}
                                             className="rounded-lg h-8"
-                                            onClick={() => toggleEnrollment(s.id, !!isEnrolled)}
+                                            onClick={() => toggleEnrollment(s.id, s.displayName || "Student", !!isEnrolled)}
                                         >
                                             {isEnrolled ? "Remove" : "Enroll"}
                                         </Button>
@@ -423,7 +432,8 @@ export default function AdminCoursesPage({ params }: { params: Promise<{ schoolS
                         <Button variant="destructive" onClick={handleDelete} className="rounded-xl">Delete</Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
-        </div>
-    );
+      </Dialog>
+    </div>
+  );
 }
+// Force hot reload

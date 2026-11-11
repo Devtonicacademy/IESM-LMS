@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import {
   BarChart,
   CheckSquare,
@@ -16,6 +18,8 @@ import {
   Award,
   MessageSquare,
   Settings as SettingsIcon,
+  HelpCircle,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -43,11 +47,16 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
     return () => unsub();
   }, [isAdmin, schoolSlug]);
 
-  const links = [
+  const generalLinks = [
     { name: "Dashboard", href: `/${schoolSlug}/dashboard`, icon: BarChart },
+    { name: "My Profile", href: `/${schoolSlug}/profile`, icon: User },
     { name: "Course Catalog", href: `/${schoolSlug}/courses`, icon: PlayCircle },
     { name: "Completed Courses", href: `/${schoolSlug}/certificates`, icon: Award },
     { name: "Messages", href: `/${schoolSlug}/messages`, icon: MessageSquare },
+    { name: "User Guide", href: `/${schoolSlug}/guide`, icon: HelpCircle },
+  ];
+
+  const adminLinks = [
     ...(isAdmin || isInstructor
       ? [
           { name: "Manage Courses", href: `/${schoolSlug}/admin/courses`, icon: CheckSquare },
@@ -130,53 +139,104 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
 
         {/* Nav links */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-          {links.map((link) => {
-            const isActive =
-              pathname === link.href || pathname.startsWith(link.href + "/");
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.name}
-                href={link.href}
-                onClick={close}
-                title={isCollapsed ? link.name : undefined}
-                className={cn(
-                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
-                  isActive
-                    ? "bg-primary/10 text-primary hover:bg-primary/15"
-                    : "text-muted-foreground hover:text-foreground",
-                  isCollapsed && "justify-center px-2"
-                )}
-              >
-                <Icon
+          <div id="tour-sidebar-nav" className="space-y-1">
+            {generalLinks.map((link) => {
+              const isActive =
+                pathname === link.href || pathname.startsWith(link.href + "/");
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  onClick={close}
+                  title={isCollapsed ? link.name : undefined}
                   className={cn(
-                    "h-4 w-4 shrink-0",
-                    isActive ? "text-primary" : "text-muted-foreground"
+                    "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
+                    isActive
+                      ? "bg-primary/10 text-primary hover:bg-primary/15"
+                      : "text-muted-foreground hover:text-foreground",
+                    isCollapsed && "justify-center px-2"
                   )}
-                />
-                {!isCollapsed && <span className="flex-1">{link.name}</span>}
-                {!isCollapsed && (link as any).badge > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                    {(link as any).badge}
-                  </span>
-                )}
-                {isCollapsed && (link as any).badge > 0 && (
-                  <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500" />
-                )}
-              </Link>
-            );
-          })}
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                  />
+                  {!isCollapsed && <span className="flex-1">{link.name}</span>}
+                  {!isCollapsed && (link as any).badge > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                      {(link as any).badge}
+                    </span>
+                  )}
+                  {isCollapsed && (link as any).badge > 0 && (
+                    <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {adminLinks.length > 0 && (
+            <div id="tour-admin-nav" className="pt-2 mt-2 border-t border-border/50 space-y-1">
+              {!isCollapsed && (
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  Management
+                </div>
+              )}
+              {adminLinks.map((link) => {
+                const isActive =
+                  pathname === link.href || pathname.startsWith(link.href + "/");
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    onClick={close}
+                    title={isCollapsed ? link.name : undefined}
+                    className={cn(
+                      "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
+                      isActive
+                        ? "bg-primary/10 text-primary hover:bg-primary/15"
+                        : "text-muted-foreground hover:text-foreground",
+                      isCollapsed && "justify-center px-2"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      )}
+                    />
+                    {!isCollapsed && <span className="flex-1">{link.name}</span>}
+                    {!isCollapsed && (link as any).badge > 0 && (
+                      <span className="ml-auto inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                        {(link as any).badge}
+                      </span>
+                    )}
+                    {isCollapsed && (link as any).badge > 0 && (
+                      <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* User info & sign out */}
         <div className="p-3 mt-auto border-t shrink-0">
           {user && !isCollapsed && (
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                {(user.displayName || user.email || "?")[0].toUpperCase()}
-              </div>
+            <Link href={`/${schoolSlug}/profile`} onClick={close} className="flex items-center gap-3 mb-3 px-1 rounded-xl hover:bg-muted/50 transition-colors py-1 group">
+              <Avatar className="w-8 h-8 shrink-0">
+                <AvatarImage src={user.photoURL || undefined} alt={user.displayName || ""} className="object-cover" />
+                <AvatarFallback className="bg-primary/20 text-xs font-bold text-primary">
+                  {(user.displayName || user.email || "?")[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
                   {user.displayName || "User"}
                 </p>
                 <p className="text-xs text-muted-foreground font-medium">
@@ -191,14 +251,17 @@ export function DashboardSidebar({ schoolSlug }: { schoolSlug: string }) {
                   )}
                 </p>
               </div>
-            </div>
+            </Link>
           )}
           {user && isCollapsed && (
-            <div className="flex justify-center mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                {(user.displayName || user.email || "?")[0].toUpperCase()}
-              </div>
-            </div>
+            <Link href={`/${schoolSlug}/profile`} onClick={close} className="flex justify-center mb-3" title="My Profile">
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={user.photoURL || undefined} alt={user.displayName || ""} className="object-cover" />
+                <AvatarFallback className="bg-primary/20 text-xs font-bold text-primary">
+                  {(user.displayName || user.email || "?")[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
           )}
           <Button
             variant="ghost"

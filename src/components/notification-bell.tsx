@@ -14,7 +14,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 import { useParams } from "next/navigation";
-import { Bell, CheckCircle, XCircle, BookOpen, X } from "lucide-react";
+import { Bell, CheckCircle, XCircle, BookOpen, X, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface Notification {
   id: string;
   type: string;
-  status: "approved" | "declined";
+  status?: "approved" | "declined";
   courseId: string;
   courseName: string;
   message: string;
@@ -158,12 +158,16 @@ export function NotificationBell() {
                     <div
                       className={cn(
                         "shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center",
-                        n.status === "approved"
+                        n.type === "session"
+                          ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                          : n.status === "approved"
                           ? "bg-green-500/15 text-green-600 dark:text-green-400"
                           : "bg-red-500/15 text-red-600 dark:text-red-400"
                       )}
                     >
-                      {n.status === "approved" ? (
+                      {n.type === "session" ? (
+                        <Calendar className="h-4 w-4" />
+                      ) : n.status === "approved" ? (
                         <CheckCircle className="h-4 w-4" />
                       ) : (
                         <XCircle className="h-4 w-4" />

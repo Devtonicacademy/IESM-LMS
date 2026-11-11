@@ -50,24 +50,32 @@ function ForgotPasswordDialog({ schoolSlug }: ForgotPasswordProps) {
       const SUPER_ADMIN_EMAIL = "devtonicllc@gmail.com";
       
       if (cleanEmail !== SUPER_ADMIN_EMAIL) {
-        // 1. Check Firestore to see if the user is even registered/invited
-        const { collection, query, where, getDocs } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        // 1. Check if the user is registered/invited using server-side API
+        try {
+          const response = await fetch("/api/users/check", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email: cleanEmail, schoolSlug }),
+          });
 
-        const usersRef = collection(db, "schools", schoolSlug, "users");
-        const q = query(usersRef, where("email", "==", cleanEmail));
-        const querySnapshot = await getDocs(q);
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.details || errData.error || "Failed to verify account status.");
+          }
 
-        if (querySnapshot.empty) {
-          toast.error("Account not found. Please contact your administrator.");
-          setResetLoading(false);
-          return;
+          const { exists } = await response.json();
+
+          if (!exists) {
+            toast.error("Account not found. Please contact your administrator.");
+            setResetLoading(false);
+            return;
+          }
+        } catch (checkErr) {
+          console.warn("Bypassing server-side existence check due to error:", checkErr);
+          // Fall back: allow the password reset flow to continue
         }
-
-        const userData = querySnapshot.docs[0].data();
-
-        // 2. We allow them to reset password even if invited !== false
-        // because if they failed signup halfway, they exist in Auth but not fully in Firestore.
       }
 
       // 3. Send the actual reset email

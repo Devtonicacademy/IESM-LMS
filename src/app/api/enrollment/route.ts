@@ -11,10 +11,12 @@ export async function POST(req: Request) {
 
     // Create a transporter using environment variables
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 465,
+      secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.SMTP_USER || process.env.EMAIL_USER,
+        pass: (process.env.SMTP_PASS || process.env.EMAIL_PASS || '').replace(/['"]/g, '').trim(),
       },
     });
 
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
               You now have full access to the course content. Log in to start learning!
             </p>
             <div style="text-align: center; margin: 24px 0;">
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://devtonic-lms-2.web.app"}/${schoolSlug}/courses"
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://iesm-lms-app-2026.web.app"}/${schoolSlug}/courses"
                  style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
                 Go to My Courses →
               </a>
